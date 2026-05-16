@@ -6,7 +6,7 @@ from app.predictor import predictor
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Загружает модель при старте приложения и освобождает ресурсы при остановке."""
+    #cЗагружает модель при старте приложения и освобождает ресурсы при остановке
     print("Loading ML model...")
     predictor.load_model()
     print("Model loaded. Risk Service is ready.")
