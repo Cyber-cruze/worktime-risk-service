@@ -63,18 +63,6 @@ def generate_synthetic_data(n=2000, seed=42):
     )
     return df
 
-    X1 = np.clip(df["overtime_hours"] / 12, 0, 1)
-    X2 = np.clip(df["meeting_density"] / 0.75, 0, 1)
-    X3 = np.clip(df["consecutive_work_days"] / 14, 0, 1)
-    X4 = np.clip(df["conflict_count"] / 6, 0, 1)
-    X5 = np.clip(df["workload_trend"] * 1.5 + 0.5, 0, 1)
-
-    df["risk_score"] = np.clip(
-        10 * (0.35*X1 + 0.25*X2 + 0.20*X3 + 0.15*X4 + 0.05*X5) + np.random.normal(0, 0.3, n),
-        0, 10
-    )
-    return df
-
 def train_and_save():
     df = generate_synthetic_data()
 
