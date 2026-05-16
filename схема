@@ -1,0 +1,16 @@
+risk-service/
+├── app/
+│   ├── __init__.py
+│   ├── main.py                 # Точка входа FastAPI: роуты, lifespan (загрузка модели), middleware
+│   ├── schemas.py              # Контракт API: Pydantic-модели запроса и ответа (чтобы Java знала формат)
+│   └── predictor.py            # "Мозги": загрузка .pkl, инференс, генерация рекомендаций и прогноза
+├── model/
+│   └── risk_model.pkl          # Обученная модель (GradientBoosting весит ~2–5 МБ, коммитим в Git)
+├── scripts/
+│   └── train.py                # Утилита для разработчика: генерирует данные → обучает → сохраняет risk_model.pkl
+── tests/
+│   └── test_contract.py        # 3–5 быстрых проверок: сервис стартует, отдаёт валидный JSON, не падает на краях
+├── requirements.txt            # fastapi, uvicorn, scikit-learn, pydantic, joblib
+├── Dockerfile                  # Чтобы команда могла поднять сервис одной командой `docker compose up`
+├── README.md                   # Инструкция для Java-команды: эндпоинты, примеры curl, описание полей
+└── .gitignore
