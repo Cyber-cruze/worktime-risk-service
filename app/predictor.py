@@ -16,7 +16,7 @@ class RiskPredictor:
         self.model = None
 
     def load_model(self):
-        """Загружает модель в память. Вызывается 1 раз при старте сервиса."""
+        # Загружает модель в память. Вызывается 1 раз при старте сервиса
         if self.model is None:
             self.model = joblib.load(MODEL_PATH)
 
