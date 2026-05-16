@@ -28,7 +28,7 @@ def health_check():
 
 @app.post("/predict", response_model=RiskResponse)
 def predict_risk(data: RiskInput):
-    """Принимает метрики сотрудника, возвращает скор риска и рекомендации."""
+    # Принимает метрики сотрудника, возвращает скор риска и рекомендации
     features = data.model_dump(exclude={'user_id'})
 
     # Получаем предсказание от ML-модуля
