@@ -1,41 +1,41 @@
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from app.schemas import RiskInput, RiskResponse
-from app.predictor import predictor
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Загружает модель при старте приложения и освобождает ресурсы при остановке
-    print("Loading ML model...")
-    predictor.load_model()
-    print("Model loaded. Risk Service is ready.")
-    yield
-
+from app.schemas import AnalyzeRequest, AnalyzeResponse
+from app.models import calculate_risk_score, classify_employee
+from app.recommendations.engine import generate_recommendations
 
 app = FastAPI(
     title="WorkTime Risk Service",
-    description="API для оценки риска выгорания сотрудников",
-    version="1.0.0",
-    lifespan=lifespan
+    description="Анализ риска выгорания и актуализации графика",
+    version="2.0.0"
 )
 
-
 @app.get("/health")
-def health_check():
-    return {"status": "ok", "service": "risk-service", "model_loaded": predictor.model is not None}
+def health():
+    return {"status": "ok", "service": "risk-service"}
 
 
-@app.post("/predict", response_model=RiskResponse)
-def predict_risk(data: RiskInput):
-    # Принимает метрики сотрудника, возвращает скор риска и рекомендации
-    features = data.model_dump(exclude={'user_id'})
 
-    # Получаем предсказание от ML-модуля
-    result = predictor.predict(features)
+# Основной эндпоинт: принимает данные сотрудника, считает риски, классифицирует и дает советы
+@app.post("/analyze", response_model=AnalyzeResponse)
+def analyze_user(request: AnalyzeRequest):
 
-    # Возвращаем полный ответ
-    return {
-        "user_id": data.user_id,
-        **result
-    }
+    # 1. Конвертируем Pydantic модель в dict для расчетов
+    payload = request.model_dump()
+
+    # 2. Считаем риск и метрики
+    risk_result = calculate_risk_score(payload)
+
+    # 3. Определяем группу (1-9)
+    classification = classify_employee(payload, risk_result)
+
+    # 4. Генерируем рекомендации
+    recommendations = generate_recommendations(classification, risk_result["metrics"])
+
+    # 5. Собираем ответ
+    return AnalyzeResponse(
+        user_id=request.user_id,
+        risk_score=risk_result["risk_score"],
+        metrics=risk_result["metrics"],
+        classification=classification,
+        recommendations=recommendations
+    )
