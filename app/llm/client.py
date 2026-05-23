@@ -59,7 +59,7 @@ def generate_llm_recommendations(profile: Dict, metrics: Dict, conflict: Dict = 
             model="llama3.1",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            temperature=0.2,  # Чуть живее, но строго
+            temperature=0.2,
             max_tokens=300,
             timeout=15.0
         )
