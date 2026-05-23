@@ -17,7 +17,7 @@ def train():
     # Признаки: [task_count, meeting_count, overtime_risk]
     X = np.random.rand(n_samples, 3)
 
-    # 2. Обучаем Predictor (Нейросеть)
+    # 2. Обучаем Predictor 
     # Если задач много или встреч много -> конфликт (1)
     y_pred = ((X[:, 0] > 0.6) | (X[:, 1] > 0.7)).astype(int)
     predictor = MLPClassifier(hidden_layer_sizes=(64, 32), max_iter=200, random_state=42)
