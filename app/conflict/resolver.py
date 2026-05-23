@@ -4,6 +4,8 @@ from app.schemas import (
     ConflictResolveRequest, ResolutionResponse, Recommendation,
     ConflictType
 )
+from app.llm.client import generate_conflict_explanation
+import os
 
 
 def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
@@ -15,14 +17,10 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
     status = "OPTIONS_PROVIDED"
     explanation = ""
 
-    # Парсим рабочие часы
     work_start_h = int(profile.workStart.split(":")[0])
     work_end_h = int(profile.workEnd.split(":")[0])
-
-    # Базовое время для расчётов (берём из конфликта или сейчас)
     ref_time = conflict.conflictDate or datetime.now()
 
-    # 1.Вне рабочего времени
     if conflict.type == ConflictType.OUTSIDE_WORK_HOURS:
         ref_h = ref_time.hour
         if ref_h < work_start_h:
@@ -33,7 +31,7 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
             reason = "Перенос на утро следующего рабочего дня"
         else:
             new_time = ref_time
-            reason = "Время в пределах графика (fallback)"
+            reason = "Время в пределах графика"
 
         recommendations.append(Recommendation(
             action="RESCHEDULE",
@@ -46,9 +44,7 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
         status = "AUTO_RESOLVED"
         explanation = f"Событие вне графика. Предложен перенос на {new_time.strftime('%H:%M')}."
 
-    # 2.Пересечение событий
     elif conflict.type == ConflictType.OVERLAPPING_EVENTS:
-        # Стратегия: сдвиг на 1 час или разделение
         new_time = ref_time + timedelta(hours=1)
         recommendations.append(Recommendation(
             action="RESCHEDULE",
@@ -64,9 +60,7 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
             confidence=0.6,
             affected_user_ids=[conflict.userId]
         ))
-        explanation = "Обнаружено пересечение. Предложены альтернативные слоты."
 
-    # 3.Перезагрузка
     elif conflict.type == ConflictType.OVERLOAD:
         recommendations.append(Recommendation(
             action="DELEGATE",
@@ -76,14 +70,13 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
         ))
         recommendations.append(Recommendation(
             action="RESCHEDULE",
-            reason="Отложить задачу на следующий спринт/неделю",
+            reason="Отложить задачу на следующий спринт или неделю",
             confidence=0.6,
             affected_user_ids=[conflict.userId]
         ))
         status = "MANUAL_REVIEW"
         explanation = "Высокая перегрузка. Требуется ручное решение или делегирование."
 
-    # 4.Конфликт и исключениями
     elif conflict.type == ConflictType.WORKDAY_EXCEPTION_CONFLICT:
         recommendations.append(Recommendation(
             action="KEEP",
@@ -103,6 +96,22 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
     else:
         explanation = "Неизвестный тип конфликта. Требуется анализ вручную."
         status = "MANUAL_REVIEW"
+
+    use_llm = os.getenv("USE_LLM_RECOMMENDATIONS", "false").lower() == "true"
+    if use_llm and recommendations:
+        best_rec = recommendations[0]
+        time_str = best_rec.suggested_start.strftime(
+            "%H:%M") if best_rec.suggested_start else "ближайшее свободное окно"
+
+
+        llm_text = generate_conflict_explanation(
+            conflict=conflict.model_dump(mode='json'),
+            profile=profile.model_dump(mode='json'),
+            action=best_rec.action,
+            new_time=time_str
+        )
+        if llm_text:
+            explanation = llm_text
 
     return ResolutionResponse(
         conflict_id=conflict.id,
