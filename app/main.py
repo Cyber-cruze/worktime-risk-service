@@ -14,7 +14,6 @@ def health():
     return {"status": "ok", "service": "risk-service"}
 
 
-
 # Основной эндпоинт: принимает данные сотрудника, считает риски, классифицирует и дает советы
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze_user(request: AnalyzeRequest):
