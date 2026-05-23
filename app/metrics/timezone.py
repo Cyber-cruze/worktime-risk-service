@@ -27,6 +27,7 @@ def calculate_timezone_mismatch(
     mismatch_count = 0
     for m in meetings:
         dt = datetime.fromisoformat(m["start"]).replace(tzinfo=tz)
+
         # Если встреча в поясе сотрудника выпадает на ночь/раннее утро (00:00-07:00)
         if dt.hour < 7 or dt.hour > 22:
             mismatch_count += 1
