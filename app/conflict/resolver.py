@@ -22,7 +22,7 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
     # Базовое время для расчётов (берём из конфликта или сейчас)
     ref_time = conflict.conflictDate or datetime.now()
 
-    # ─── 1. ВНЕ РАБОЧЕГО ВРЕМЕНИ ───
+    # 1.Вне рабочего времени
     if conflict.type == ConflictType.OUTSIDE_WORK_HOURS:
         ref_h = ref_time.hour
         if ref_h < work_start_h:
@@ -46,7 +46,7 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
         status = "AUTO_RESOLVED"
         explanation = f"Событие вне графика. Предложен перенос на {new_time.strftime('%H:%M')}."
 
-    # ─── 2. ПЕРЕСЕЧЕНИЕ СОБЫТИЙ ──
+    # 2.Пересечение событий
     elif conflict.type == ConflictType.OVERLAPPING_EVENTS:
         # Стратегия: сдвиг на 1 час или разделение
         new_time = ref_time + timedelta(hours=1)
@@ -66,7 +66,7 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
         ))
         explanation = "Обнаружено пересечение. Предложены альтернативные слоты."
 
-    # ── 3. ПЕРЕГРУЗКА ──
+    # 3.Перезагрузка
     elif conflict.type == ConflictType.OVERLOAD:
         recommendations.append(Recommendation(
             action="DELEGATE",
@@ -83,7 +83,7 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
         status = "MANUAL_REVIEW"
         explanation = "Высокая перегрузка. Требуется ручное решение или делегирование."
 
-    # ─── 4. КОНФЛИКТ С ИСКЛЮЧЕНИЯМИ ───
+    # 4.Конфликт и исключениями
     elif conflict.type == ConflictType.WORKDAY_EXCEPTION_CONFLICT:
         recommendations.append(Recommendation(
             action="KEEP",

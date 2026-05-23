@@ -46,11 +46,10 @@ class ScheduleScorer:
             "grade": grade,
             "breakdown": {
                 "workload_balance": round(score * 0.6, 1),
-                "focus_time_protection": round(score * 0.3, 1),  # ← Добавь эту строку
+                "focus_time_protection": round(score * 0.3, 1),
                 "schedule_stability": round(score * 0.4, 1)
             }
         }
 
 
-# Глобальный инстанс
 scorer = ScheduleScorer()

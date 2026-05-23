@@ -26,15 +26,14 @@ class AnomalyDetector:
             return {"is_anomalous": False, "anomaly_score": 0.0, "detected_patterns": [],
                     "action_required": "No action"}
 
-        # Фичи: просто кол-во событий для демо
+
         X = np.array([[len(activity_history)]])
 
-        # Если модель не обучена — обучаем на лету на фейковых данных
         try:
             # Проверяем, обучена ли модель
             _ = self.model.estimators_
         except AttributeError:
-            # Обучаем на синтетике
+
             X_train = np.random.rand(100, 1) * 10
             X_train[-5:] = np.random.rand(5, 1) * 50  # аномалии
             self.model.fit(X_train)
@@ -58,5 +57,4 @@ class AnomalyDetector:
         }
 
 
-# Глобальный инстанс
 detector = AnomalyDetector()
