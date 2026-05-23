@@ -1,7 +1,17 @@
-from .input_schemas import AnalyzeRequest, Task, Meeting, Profile, HRData
+from .input_schemas import AnalyzeRequest
 from .output_schemas import AnalyzeResponse, RiskMetrics, ClassificationResult
 
+from .conflict_schemas import (
+    ConflictResolveRequest, ProfileSchema, TaskSchema, ConflictSchema,
+    EmploymentType, EventType, ConflictType
+)
+from .resolution_schemas import ResolutionResponse, Recommendation
+from .ml_schemas import PredictionResponse, ScoreResponse, AnomalyResponse
+
 __all__ = [
-    "AnalyzeRequest", "Task", "Meeting", "Profile", "HRData",
-    "AnalyzeResponse", "RiskMetrics", "ClassificationResult"
+    "AnalyzeRequest", "AnalyzeResponse", "RiskMetrics", "ClassificationResult",
+    "ConflictResolveRequest", "ProfileSchema", "TaskSchema", "ConflictSchema",
+    "EmploymentType", "EventType", "ConflictType",
+    "ResolutionResponse", "Recommendation",
+    "PredictionResponse", "ScoreResponse", "AnomalyResponse"
 ]

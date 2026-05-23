@@ -13,7 +13,7 @@
 
 ### Вариант 1: Docker
 ```bash
-  docker build -t worktime-risk-service .
+  docker build -t worktime-risk-service 
   docker run -p 8005:8005 worktime-risk-service
 ```
 
