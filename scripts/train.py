@@ -16,6 +16,7 @@ FEATURES = [
     "night_weekend_hours"
 ]
 
+
 def generate_synthetic_data(n=2000, seed=42):
     np.random.seed(seed)
     cluster = np.random.choice(["normal", "overloaded", "underloaded"], n, p=[0.7, 0.15, 0.15])
