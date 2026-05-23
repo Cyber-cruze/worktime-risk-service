@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from app.schemas import AnalyzeRequest, AnalyzeResponse
 from app.models import calculate_risk_score, classify_employee
 from app.recommendations.engine import generate_recommendations
+from app.schemas import ConflictResolveRequest, ResolutionResponse
+from app.conflict.resolver import resolve_conflict
 
 app = FastAPI(
     title="WorkTime Risk Service",
@@ -38,3 +40,7 @@ def analyze_user(request: AnalyzeRequest):
         classification=classification,
         recommendations=recommendations
     )
+
+@app.post("/conflicts/resolve", response_model=ResolutionResponse)
+def resolve(conflict_request: ConflictResolveRequest):
+    return resolve_conflict(conflict_request)
