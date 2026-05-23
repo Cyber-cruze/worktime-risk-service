@@ -14,7 +14,7 @@ def train():
     np.random.seed(42)
     n_samples = 500
 
-    # Фичи: [task_count, meeting_count, overtime_risk]
+    # Признаки: [task_count, meeting_count, overtime_risk]
     X = np.random.rand(n_samples, 3)
 
     # 2. Обучаем Predictor (Нейросеть)
@@ -26,7 +26,7 @@ def train():
     print("conflict_predictor.pkl saved")
 
     # 3. Обучаем Scorer (GBM)
-    # Фичи: [hours, conflicts] -> Score 0-100
+    # Признаки: [hours, conflicts] -> Score 0-100
     X_score = np.random.rand(n_samples, 2) * 100
     y_score = 100 - (X_score[:, 0] * 0.5 + X_score[:, 1] * 2)
     scorer = GradientBoostingRegressor(random_state=42)
@@ -35,9 +35,8 @@ def train():
     print("schedule_scorer.pkl saved")
 
     # 4. Обучаем Anomaly Detector
-    # Фичи: [activity_count]
+    # Признаки: [activity_count]
     X_anom = np.random.rand(n_samples, 1) * 10
-    # Добавим несколько аномалий
     X_anom[-10:] = np.random.rand(10, 1) * 50
     detector = IsolationForest(contamination=0.05, random_state=42)
     detector.fit(X_anom)

@@ -3,7 +3,7 @@ from typing import List, Optional
 from datetime import datetime
 
 class Recommendation(BaseModel):
-    action: str  # "RESCHEDULE", "SPLIT", "DELEGATE", "CANCEL", "KEEP"
+    action: str
     suggested_start: Optional[datetime] = None
     suggested_duration_min: Optional[int] = None
     reason: str
@@ -13,6 +13,6 @@ class Recommendation(BaseModel):
 class ResolutionResponse(BaseModel):
     conflict_id: str
     conflict_type: str
-    status: str  # "AUTO_RESOLVED", "OPTIONS_PROVIDED", "MANUAL_REVIEW"
+    status: str
     recommendations: List[Recommendation]
     explanation: str
