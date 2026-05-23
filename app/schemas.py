@@ -26,7 +26,7 @@ class Meeting(BaseModel):
 
 class Conflict(BaseModel):
     type: str = Field(..., description="outside_hours | overlap | hr_mismatch")
-    severity: str = Field(..., description="low | medium | high | critical")
+    severity: str = Field(..., description="low |    medium | high | critical")
 
 class HRData(BaseModel):
     official_schedule: str = Field(..., description="График из HR-системы, например '09:00-18:00'")
