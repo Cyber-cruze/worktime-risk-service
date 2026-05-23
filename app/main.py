@@ -9,7 +9,9 @@ from app.schemas.ml_schemas import PredictionResponse, ScoreResponse, AnomalyRes
 from app.ml.predictor import predictor
 from app.ml.scorer import scorer
 from app.ml.anomaly import detector
+from dotenv import load_dotenv
 
+load_dotenv()
 
 app = FastAPI(
     title="WorkTime Risk Service",
@@ -24,11 +26,11 @@ def health():
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze_user(request: AnalyzeRequest):
+
     payload = request.model_dump()
     risk_result = calculate_risk_score(payload)
     classification = classify_employee(payload, risk_result)
 
-    # Передаём профиль и метрики в движок
     recommendations = generate_recommendations(
         classification=classification,
         metrics=risk_result["metrics"],
@@ -43,7 +45,6 @@ def analyze_user(request: AnalyzeRequest):
         classification=classification,
         recommendations=recommendations
     )
-
 
 @app.post("/conflicts/resolve", response_model=ResolutionResponse)
 def resolve(conflict_request: ConflictResolveRequest):

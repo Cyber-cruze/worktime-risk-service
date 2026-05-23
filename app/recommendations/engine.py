@@ -5,19 +5,23 @@ from app.llm.client import generate_llm_recommendations
 
 def generate_recommendations(classification: Dict, metrics: Dict, profile: Dict = None, conflict: Dict = None) -> List[
     str]:
-    """
-    Генерирует рекомендации.
-    Если USE_LLM=true и Ollama работает, то использует LLM.
-    Иначе: старые правила (fallback).
-    """
     use_llm = os.getenv("USE_LLM_RECOMMENDATIONS", "false").lower() == "true"
 
-    if use_llm and profile:
-        llm_recs = generate_llm_recommendations(profile, metrics, conflict)
-        if llm_recs:  # Если LLM вернула валидный список
-            return llm_recs
 
-    # Fallback: старые правила
+    print(f"DEBUG: use_llm={use_llm}, profile={profile is not None}")
+
+    if use_llm and profile:
+        print("DEBUG: Вызываем LLM...")
+        llm_recs = generate_llm_recommendations(profile, metrics, conflict)
+        if llm_recs:
+            print(f"DEBUG: LLM вернула: {llm_recs}")
+            return llm_recs
+        else:
+            print("DEBUG: LLM вернула пустой список")
+
+    print("DEBUG: Используем fallback (правила)")
+
+
     return _fallback_recommendations(classification, metrics)
 
 
