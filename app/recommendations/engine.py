@@ -1,40 +1,49 @@
+import os
 from typing import List, Dict
+from app.llm.client import generate_llm_recommendations
 
-# Генерирует список рекомендаций на основе группы риска и метрик.
-def generate_recommendations(classification: Dict, metrics: Dict) -> List[str]:
 
+def generate_recommendations(classification: Dict, metrics: Dict, profile: Dict = None, conflict: Dict = None) -> List[
+    str]:
+    """
+    Генерирует рекомендации.
+    Если USE_LLM=true и Ollama работает, то использует LLM.
+    Иначе: старые правила (fallback).
+    """
+    use_llm = os.getenv("USE_LLM_RECOMMENDATIONS", "false").lower() == "true"
+
+    if use_llm and profile:
+        llm_recs = generate_llm_recommendations(profile, metrics, conflict)
+        if llm_recs:  # Если LLM вернула валидный список
+            return llm_recs
+
+    # Fallback: старые правила
+    return _fallback_recommendations(classification, metrics)
+
+
+def _fallback_recommendations(classification: Dict, metrics: Dict) -> List[str]:
     group_id = classification.get("group_id")
     recs = []
 
-    # Рекомендации по группам:
-
-    if group_id == 2:  # Устаревший график
-        recs.append("Обновите данные профиля: укажите актуальные рабочие часы.")
+    if group_id == 2:
+        recs.append(" Обновите данные профиля: укажите актуальные рабочие часы.")
         recs.append("Подтвердите ваш часовой пояс в настройках.")
-
-    if group_id == 3:  # Встречи вне рабочего времени
-        recs.append(" У вас есть встречи в нерабочее время. Попробуйте перенести их на рабочий график.")
-        recs.append(" Предложите коллегам найти общее время для командных встреч (Team Overlap).")
-
-    if group_id == 4:  # Высокая нагрузка
+    if group_id == 3:
+        recs.append("У вас есть встречи в нерабочее время. Попробуйте перенести их на рабочий график.")
+        recs.append("Предложите коллегам найти общее время для командных встреч (Team Overlap).")
+    if group_id == 4:
         recs.append("Загрузка превышает 90%. Не планируйте новых задач на эту неделю.")
         recs.append("Рассмотрите возможность делегирования части задач.")
-
-    if group_id == 6:  # Конфликт HR/Календарь
+    if group_id == 6:
         recs.append("Обнаружено расхождение с официальным графиком (отпуск/больничный).")
         recs.append("Свяжитесь с HR для синхронизации статусов.")
-
-    if group_id == 8:  # Пересмотр графика
+    if group_id == 8:
         recs.append("Текущий график неэффективен. Рекомендуется встреча с тимлидом для оптимизации.")
-
-    # Детальные рекомендации на основе метрик (если общие не сработали):
 
     if metrics.get("C_i_outside_hours", 0) > 0.5:
         recs.append("Более 50% встреч проходят вне рабочего графика. Это критично для баланса.")
-
     if metrics.get("L_i_workload", 0) > 0.9:
-        recs.append(" Ваша загрузка задач слишком высока.")
-
+        recs.append("Ваша загрузка задач слишком высока.")
     if metrics.get("A_i_freshness", 1.0) < 0.5:
         recs.append("Данные профиля устарели более 15 дней назад.")
 

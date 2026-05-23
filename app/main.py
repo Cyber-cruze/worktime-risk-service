@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from app.schemas import AnalyzeRequest, AnalyzeResponse
 from app.models import calculate_risk_score, classify_employee
@@ -21,23 +22,20 @@ def health():
     return {"status": "ok", "service": "risk-service"}
 
 
-# Основной эндпоинт: принимает данные сотрудника, считает риски, классифицирует и дает советы
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze_user(request: AnalyzeRequest):
-
-    # 1. Конвертируем Pydantic модель в dict для расчетов
     payload = request.model_dump()
-
-    # 2. Считаем риск и метрики
     risk_result = calculate_risk_score(payload)
-
-    # 3. Определяем группу (1-9)
     classification = classify_employee(payload, risk_result)
 
-    # 4. Генерируем рекомендации
-    recommendations = generate_recommendations(classification, risk_result["metrics"])
+    # Передаём профиль и метрики в движок
+    recommendations = generate_recommendations(
+        classification=classification,
+        metrics=risk_result["metrics"],
+        profile=payload.get("profile"),
+        conflict=None
+    )
 
-    # 5. Собираем ответ
     return AnalyzeResponse(
         user_id=request.user_id,
         risk_score=risk_result["risk_score"],
@@ -46,9 +44,23 @@ def analyze_user(request: AnalyzeRequest):
         recommendations=recommendations
     )
 
+
 @app.post("/conflicts/resolve", response_model=ResolutionResponse)
 def resolve(conflict_request: ConflictResolveRequest):
-    return resolve_conflict(conflict_request)
+    result = resolve_conflict(conflict_request)
+
+    # Обогащаем объяснение через LLM, если включено
+    if os.getenv("USE_LLM_RECOMMENDATIONS", "false").lower() == "true":
+        llm_explanation = generate_recommendations(
+            classification={"group_id": 0},
+            metrics={},
+            profile=conflict_request.profile.model_dump(),
+            conflict=conflict_request.conflict.model_dump()
+        )
+        if llm_explanation:
+            result.explanation = llm_explanation[0]
+
+    return result
 
 
 @app.post("/ml/predict", response_model=PredictionResponse)
