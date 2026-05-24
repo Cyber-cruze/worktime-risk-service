@@ -62,3 +62,4 @@ class ConflictResolveRequest(BaseModel):
     conflict: ConflictSchema
     profile: ProfileSchema
     tasks: List[TaskSchema] = Field(default_factory=list)
+

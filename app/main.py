@@ -11,6 +11,17 @@ from app.ml.scorer import scorer
 from app.ml.anomaly import detector
 from dotenv import load_dotenv
 
+from app.schemas import (
+    ConflictResolveRequest, ResolutionResponse,
+    ConflictResolveBatchRequest, ConflictResolveBatchResponse,
+    ConflictResolutionResult
+)
+
+
+from app.conflict.resolver import resolve_conflict
+from typing import List
+import traceback
+
 load_dotenv()
 
 app = FastAPI(
@@ -22,6 +33,46 @@ app = FastAPI(
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "risk-service"}
+
+@app.post("/conflicts/resolve/batch", response_model=ConflictResolveBatchResponse)
+async def resolve_conflicts_batch(request: ConflictResolveBatchRequest):
+    results: List[ConflictResolutionResult] = []
+    success_count = 0
+    error_count = 0
+
+    for idx, conflict_req in enumerate(request.conflicts):
+        try:
+            resolution = resolve_conflict(conflict_req)
+
+            results.append(ConflictResolutionResult(
+                conflict_id=resolution.conflict_id,
+                conflict_type=resolution.conflict_type,
+                status=resolution.status,
+                recommendations=[rec.dict() for rec in resolution.recommendations],
+                explanation=resolution.explanation
+            ))
+            success_count += 1
+
+        except Exception as e:
+
+            print(f"Ошибка при обработке конфликта #{idx}: {e}")
+            traceback.print_exc()
+
+            results.append(ConflictResolutionResult(
+                conflict_id=conflict_req.conflict.id,
+                conflict_type=conflict_req.conflict.type.value,
+                status="ERROR",
+                recommendations=[],
+                explanation=f"Не удалось разрешить конфликт: {str(e)}"
+            ))
+            error_count += 1
+
+    return ConflictResolveBatchResponse(
+        results=results,
+        total_processed=len(request.conflicts),
+        success_count=success_count,
+        error_count=error_count
+    )
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
@@ -49,18 +100,6 @@ def analyze_user(request: AnalyzeRequest):
 @app.post("/conflicts/resolve", response_model=ResolutionResponse)
 def resolve(conflict_request: ConflictResolveRequest):
     result = resolve_conflict(conflict_request)
-
-    # Обогащаем объяснение через LLM, если включено
-    if os.getenv("USE_LLM_RECOMMENDATIONS", "false").lower() == "true":
-        llm_explanation = generate_recommendations(
-            classification={"group_id": 0},
-            metrics={},
-            profile=conflict_request.profile.model_dump(),
-            conflict=conflict_request.conflict.model_dump()
-        )
-        if llm_explanation:
-            result.explanation = llm_explanation[0]
-
     return result
 
 
