@@ -77,17 +77,34 @@ async def resolve_conflicts_batch(request: ConflictResolveBatchRequest):
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze_user(request: AnalyzeRequest):
+    try:
+        payload = request.model_dump()
+        risk_result = calculate_risk_score(payload)
+        classification = classify_employee(payload, risk_result)
 
-    payload = request.model_dump()
-    risk_result = calculate_risk_score(payload)
-    classification = classify_employee(payload, risk_result)
+        recommendations = generate_recommendations(
+            classification=classification,
+            metrics=risk_result["metrics"],
+            profile=payload.get("profile"),
+            hr_data=payload.get("hr_data"),
+            meetings=payload.get("meetings"),
+            conflict=None
+        )
 
-    recommendations = generate_recommendations(
-        classification=classification,
-        metrics=risk_result["metrics"],
-        profile=payload.get("profile"),
-        conflict=None
-    )
+        return AnalyzeResponse(
+            user_id=request.user_id,
+            risk_score=risk_result["risk_score"],
+            metrics=risk_result["metrics"],
+            classification=classification,
+            recommendations=recommendations
+        )
+    except Exception as e:
+        traceback.print_exc()
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Internal error: {type(e).__name__}: {str(e)}"}
+        )
 
     return AnalyzeResponse(
         user_id=request.user_id,
@@ -99,8 +116,16 @@ def analyze_user(request: AnalyzeRequest):
 
 @app.post("/conflicts/resolve", response_model=ResolutionResponse)
 def resolve(conflict_request: ConflictResolveRequest):
-    result = resolve_conflict(conflict_request)
-    return result
+    try:
+        result = resolve_conflict(conflict_request)
+        return result
+    except Exception as e:
+        traceback.print_exc()
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Internal error: {type(e).__name__}: {str(e)}"}
+        )
 
 
 @app.post("/ml/predict", response_model=PredictionResponse)

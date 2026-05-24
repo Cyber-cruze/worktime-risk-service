@@ -33,11 +33,9 @@ def calculate_risk_score(
     # 2. Считаем метрики (используем код из Шага 2)
 
     # A_i: Актуальность (Freshness)
-    # В формуле используется (1 - A_i), так как риск растет, когда данные старые
     a_i = calculate_freshness_score(profile.get("last_updated"))
 
     # L_i: Загрузка и C_i: Встречи вне часов
-    # Ёмкость недели зависит от типа занятости
     employment = str(profile.get("employment", profile.get("employmentType", "FULL_TIME"))).upper().replace("-", "_")
     if employment in ("PART_TIME", "PART_TIME"):
         weekly_cap = 20.0

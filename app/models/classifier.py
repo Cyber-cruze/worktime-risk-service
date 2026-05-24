@@ -23,8 +23,6 @@ def classify_employee(payload: Dict, risk_data: Dict) -> Dict:
     hr_data = payload.get("hr_data", {})
     meetings = payload.get("meetings", [])
 
-    # Логика классификаци:
-
     # 6. Конфликт HR (самый критичный: отпуск/больничный vs встречи)
     # Также проверяем прямой флаг on_vacation + наличие встреч
     has_vacation_with_meetings = hr_data.get("on_vacation") and len(meetings) > 0

@@ -7,7 +7,6 @@ from typing import Dict, List
 # Путь к модели
 MODEL_PATH = Path(__file__).parent.parent.parent / "model" / "conflict_predictor.pkl"
 
-
 class ConflictPredictor:
     def __init__(self):
         self.model = None
@@ -24,7 +23,6 @@ class ConflictPredictor:
             self.model = self._train_dummy_model()
 
     def _train_dummy_model(self):
-        # Обучает простую сеть на лету, если файла нет
         model = MLPClassifier(hidden_layer_sizes=(32, 16), max_iter=50, random_state=42)
 
         X = np.array([[0.8, 5, 10], [0.2, 1, 0], [0.9, 8, 15], [0.3, 2, 2]])
@@ -45,7 +43,7 @@ class ConflictPredictor:
 
     def predict(self, profile: Dict, tasks: List[Dict]) -> float:
         X = self.extract_features(profile, tasks)
-        # predict_proba возвращает [[prob_0, prob_1]]
+
         probs = self.model.predict_proba(X)
         return float(probs[0][1])
 

@@ -1,18 +1,31 @@
 import os
 from typing import List, Dict
-from app.llm.client import generate_llm_recommendations
 
 
-def generate_recommendations(classification: Dict, metrics: Dict, profile: Dict = None, conflict: Dict = None) -> List[
-    str]:
+def generate_recommendations(
+        classification: Dict,
+        metrics: Dict,
+        profile: Dict = None,
+        hr_data: Dict = None,
+        meetings: List[Dict] = None,
+        conflict: Dict = None
+) -> List[str]:
     use_llm = os.getenv("USE_LLM_RECOMMENDATIONS", "false").lower() == "true"
-
 
     print(f"DEBUG: use_llm={use_llm}, profile={profile is not None}")
 
     if use_llm and profile:
+        # Ленивый импорт — избегаем circular import на старте
+        from app.llm.client import generate_llm_recommendations
+
         print("DEBUG: Вызываем LLM...")
-        llm_recs = generate_llm_recommendations(profile, metrics, conflict)
+        llm_recs = generate_llm_recommendations(
+            profile=profile,
+            metrics=metrics,
+            hr_data=hr_data,
+            meetings=meetings,
+            conflict=conflict
+        )
         if llm_recs:
             print(f"DEBUG: LLM вернула: {llm_recs}")
             return llm_recs
@@ -20,7 +33,6 @@ def generate_recommendations(classification: Dict, metrics: Dict, profile: Dict 
             print("DEBUG: LLM вернула пустой список")
 
     print("DEBUG: Используем fallback (правила)")
-
 
     return _fallback_recommendations(classification, metrics)
 
@@ -46,7 +58,7 @@ def _fallback_recommendations(classification: Dict, metrics: Dict) -> List[str]:
     if group_id == 8:
         recs.append("Текущий график неэффективен. Рекомендуется встреча с тимлидом для оптимизации.")
 
-    # Дополнительные сигналы (без вредных советов про «увеличьте нагрузку»)
+
     if metrics.get("C_i_outside_hours", 0) > 0.5:
         recs.append("Более 50% встреч проходят вне рабочего графика. Это критично для баланса.")
     if metrics.get("L_i_workload", 0) > 0.9:
