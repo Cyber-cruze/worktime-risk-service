@@ -14,7 +14,7 @@ class ScoreBreakdown(BaseModel):
 class ScoreResponse(BaseModel):
     user_id: int
     quality_score: float = Field(ge=0.0, le=100.0)
-    grade: str  # "A", "B", "C", "D"
+    grade: str
     breakdown: ScoreBreakdown
 
 class AnomalyResponse(BaseModel):
