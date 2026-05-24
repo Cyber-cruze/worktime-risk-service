@@ -59,7 +59,6 @@ def generate_llm_recommendations(profile: Dict, metrics: Dict, hr_data: Dict = N
     safe_profile = _make_json_safe(profile)
     safe_metrics = _make_json_safe(metrics)
 
-    # 🔒 PYTHON GUARD
     # 1. ПРОВЕРКА ОТПУСКА (теперь берём из отдельного параметра)
     vac_flag = (hr_data or {}).get('on_vacation')
     if vac_flag in [True, 'true', 1, '1']:
