@@ -37,10 +37,20 @@ def calculate_risk_score(
     a_i = calculate_freshness_score(profile.get("last_updated"))
 
     # L_i: Загрузка и C_i: Встречи вне часов
+    # Ёмкость недели зависит от типа занятости
+    employment = str(profile.get("employment", profile.get("employmentType", "FULL_TIME"))).upper().replace("-", "_")
+    if employment in ("PART_TIME", "PART_TIME"):
+        weekly_cap = 20.0
+    elif employment == "CONTRACT":
+        weekly_cap = 40.0
+    else:
+        weekly_cap = 40.0
+
     workload_metrics = calculate_workload_metrics(
         tasks=tasks,
         meetings=meetings,
-        profile=profile
+        profile=profile,
+        weekly_capacity=weekly_cap
     )
     l_i = workload_metrics["L_i"]
     c_i = workload_metrics["C_i"]
