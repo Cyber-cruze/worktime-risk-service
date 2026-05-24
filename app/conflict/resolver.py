@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from app.schemas import (
     ConflictResolveRequest, ResolutionResponse, Recommendation, ConflictType
 )
-from app.llm.client import generate_conflict_explanation
 import os
 
 
@@ -49,6 +48,7 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
             action="SPLIT", reason="Разделить встречу на две части по 30 мин в разные дни",
             confidence=0.6, affected_user_ids=[conflict.userId]
         ))
+        explanation = "Обнаружено наложение событий. Предложены варианты разделения или переноса."
 
     elif conflict.type == ConflictType.OVERLOAD:
         recommendations.append(Recommendation(
@@ -77,24 +77,28 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
         explanation = "Неизвестный тип конфликта. Требуется анализ вручную."
         status = "MANUAL_REVIEW"
 
-    # === 🔒 ЕДИНСТВЕННЫЙ БЛОК LLM (без DEBUG, без дублей) ===
+    # === LLM-блок (ленивый импорт + try/except — безопасно) ===
     use_llm = os.getenv("USE_LLM_RECOMMENDATIONS", "false").lower() == "true"
     if use_llm and recommendations:
-        best_rec = recommendations[0]
-        time_str = best_rec.suggested_start.strftime(
-            "%H:%M") if best_rec.suggested_start else "ближайшее свободное окно"
+        try:
+            from app.llm.client import generate_conflict_explanation
 
-        llm_text = generate_conflict_explanation(
-            conflict=conflict.model_dump(mode='json'),
-            profile=profile.model_dump(mode='json'),
-            action=best_rec.action,
-            new_time=time_str
-        )
+            best_rec = recommendations[0]
+            time_str = best_rec.suggested_start.strftime(
+                "%H:%M") if best_rec.suggested_start else "ближайшее свободное окно"
 
-        # Защита: перезаписываем explanation ТОЛЬКО если это строка и она не пустая
-        if isinstance(llm_text, str) and llm_text.strip():
-            explanation = llm_text
-    # =============================================
+            llm_text = generate_conflict_explanation(
+                conflict=conflict.model_dump(mode='json'),
+                profile=profile.model_dump(mode='json'),
+                action=best_rec.action,
+                new_time=time_str
+            )
+
+            # Защита: перезаписываем explanation ТОЛЬКО если это строка и она не пустая
+            if isinstance(llm_text, str) and llm_text.strip():
+                explanation = llm_text
+        except Exception as e:
+            print(f"[resolver] LLM-пояснение недоступно: {e}. Используем fallback.")
 
     return ResolutionResponse(
         conflict_id=conflict.id,

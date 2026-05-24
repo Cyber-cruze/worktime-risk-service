@@ -23,10 +23,10 @@ def classify_employee(payload: Dict, risk_data: Dict) -> Dict:
     hr_data = payload.get("hr_data", {})
     meetings = payload.get("meetings", [])
 
-    # Логика классификаци:
-
     # 6. Конфликт HR (самый критичный: отпуск/больничный vs встречи)
-    if metrics["H_i_hr_conflict"] > 0.4:
+    # Также проверяем прямой флаг on_vacation + наличие встреч
+    has_vacation_with_meetings = hr_data.get("on_vacation") and len(meetings) > 0
+    if metrics["H_i_hr_conflict"] >= 0.4 or has_vacation_with_meetings:
         return {"group_id": 6, "group_name": GROUPS[6]}
 
     # 4. Высокая нагрузка (L_i > 1.0 значит переработка > 100%)

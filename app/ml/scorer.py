@@ -6,7 +6,6 @@ from typing import Dict, List
 
 MODEL_PATH = Path(__file__).parent.parent.parent / "model" / "schedule_scorer.pkl"
 
-
 class ScheduleScorer:
     def __init__(self):
         self.model = None
@@ -23,13 +22,12 @@ class ScheduleScorer:
 
     def _train_dummy_model(self):
         model = GradientBoostingRegressor(random_state=42)
-        X = np.array([[40, 5], [60, 10], [20, 2]])  # hours, conflicts
-        y = np.array([80, 40, 95])  # quality score
+        X = np.array([[40, 5], [60, 10], [20, 2]])
+        y = np.array([80, 40, 95])
         model.fit(X, y)
         return model
 
     def score(self, profile: Dict, tasks: List[Dict]) -> Dict:
-        # Читаем тип занятости без ошибок
         emp_type = profile.get("employmentType", "FULL_TIME")
         hours = 40 if emp_type == "FULL_TIME" else 20
 
