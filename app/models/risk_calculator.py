@@ -87,6 +87,9 @@ def calculate_risk_score(
             "L_i_workload": round(l_i, 3),
             "C_i_outside_hours": round(c_i, 3),
             "Z_i_timezone": round(z_i, 3),
-            "H_i_hr_conflict": round(h_i, 3)
+            "H_i_hr_conflict": round(h_i, 3),
+            "total_task_hours": workload_metrics.get("total_task_hours", 0),
+            "total_meeting_hours": workload_metrics.get("total_meeting_hours", 0)
+
         }
     }
