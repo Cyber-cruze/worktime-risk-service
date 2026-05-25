@@ -18,7 +18,6 @@ class HRData(BaseModel):
     officialSchedule: str = "09:00-18:00"
     onVacation: bool = False
 
-
 class AnalyzeRequest(BaseModel):
     userId: int
     profile: Profile
