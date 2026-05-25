@@ -5,8 +5,8 @@ class Task(BaseModel):
     hours: float = Field(..., description="Часы на задачу")
 
 class Meeting(BaseModel):
-    start: str = Field(..., description="ISO формат: YYYY-MM-DDTHH:MM:SS")
-    end: str = Field(..., description="ISO формат: YYYY-MM-DDTHH:MM:SS")
+    startTime: str = Field(..., description="ISO формат: YYYY-MM-DDTHH:MM:SS")
+    endTime: str = Field(..., description="ISO формат: YYYY-MM-DDTHH:MM:SS")
 
 class Profile(BaseModel):
     workHours: dict = Field(default_factory=lambda: {"start": "09:00", "end": "18:00"})
@@ -19,7 +19,7 @@ class HRData(BaseModel):
     onVacation: bool = False
 
 class AnalyzeRequest(BaseModel):
-    userId: str
+    userId: int
     profile: Profile
     tasks: List[Task] = []
     meetings: List[Meeting] = []
