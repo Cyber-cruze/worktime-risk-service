@@ -9,19 +9,19 @@ class Meeting(BaseModel):
     end: str = Field(..., description="ISO формат: YYYY-MM-DDTHH:MM:SS")
 
 class Profile(BaseModel):
-    work_hours: dict = Field(default_factory=lambda: {"start": "09:00", "end": "18:00"})
+    workHours: dict = Field(default_factory=lambda: {"start": "09:00", "end": "18:00"})
     timezone: str = "Europe/Moscow"
-    last_updated: str = Field(..., description="ISO дата обновления")
+    lastUpdated: str = Field(..., description="ISO дата обновления")
     employment: str = "full-time"
 
 class HRData(BaseModel):
-    official_schedule: str = "09:00-18:00"
-    on_vacation: bool = False
+    officialSchedule: str = "09:00-18:00"
+    onVacation: bool = False
 
 class AnalyzeRequest(BaseModel):
-    user_id: str
+    userId: str
     profile: Profile
     tasks: List[Task] = []
     meetings: List[Meeting] = []
-    hr_data: HRData = HRData()
+    hrData: HRData = HRData()
     conflicts: list = []
