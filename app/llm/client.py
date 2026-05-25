@@ -116,12 +116,12 @@ def generate_llm_recommendations(
     total_hours = safe_metrics.get('total_task_hours', 0) or safe_metrics.get('hours', 0)
 
     if emp_type == 'PART_TIME' and (workload > 0.3 or total_hours > 4):
-        guard_recs.append("Нагрузка превышает лимит для PART_TIME. Рекомендуется сократить задачи или пересмотреть контракт.")
+        guard_recs.append("Нагрузка превышает лимит для неполного рабочего дня. Рекомендуется сократить задачи или пересмотреть контракт.")
         if workload > 0.5:
-            guard_recs.append(f"Текущая загрузка {int(workload*100)}% при допустимом лимите 50% для PART_TIME. Это серьёзный риск переутомления.")
-        guard_recs.append("Обсудите с руководителем возможность перехода на FULL_TIME или сокращения объёма задач.")
+            guard_recs.append(f"Текущая загрузка {int(workload*100)}% при допустимом лимите 50% для неполного рабочего дня. Это серьёзный риск переутомления.")
+        guard_recs.append("Обсудите с руководителем возможность перехода на полный рабочий день или сокращения объёма задач.")
         if metrics.get('C_i_outside_hours', 0) > 0.3:
-            guard_recs.append("Часть встреч проходит вне согласованного графика — перенесите их в рабочие часы PART_TIME.")
+            guard_recs.append("Часть встреч проходит вне согласованного графика — перенесите их в рабочие часы.")
         return guard_recs
 
     name = safe_profile.get("name", "Коллега")
