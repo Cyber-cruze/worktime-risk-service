@@ -29,7 +29,6 @@ class AnomalyDetector:
             loaded = joblib.load(MODEL_PATH)
             expected = getattr(loaded, 'n_features_in_', None)
             if expected is not None and expected != N_FEATURES:
-                print(f"[anomaly] pkl-модель ждёт {expected} фичей, нужно {N_FEATURES}. Используем dummy.")
                 return
             # Пробуем тестовый predict
             test_X = np.zeros((1, N_FEATURES))

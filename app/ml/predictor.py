@@ -29,7 +29,7 @@ class ConflictPredictor:
             loaded = joblib.load(MODEL_PATH)
             expected = getattr(loaded, 'n_features_in_', None)
             if expected is not None and expected != N_FEATURES:
-                print(f"[predictor] pkl-модель ждёт {expected} фичей, нужно {N_FEATURES}. Используем dummy.")
+
                 return
             test_X = np.zeros((1, N_FEATURES))
             if expected is None:
@@ -40,7 +40,7 @@ class ConflictPredictor:
                     return
             self.model = loaded
             self._use_dummy = False
-            print("[predictor] pkl-модель загружена успешно.")
+
         except Exception as e:
             print(f"[predictor] Ошибка загрузки pkl: {e}. Используем dummy.")
 
