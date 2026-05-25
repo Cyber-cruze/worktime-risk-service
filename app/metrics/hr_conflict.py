@@ -5,6 +5,11 @@ from typing import List, Dict
 Учитывает: отпуск vs встречи, официальный график vs факт'''
 
 
+def _get_start(m: Dict) -> str:
+    """Берёт start_time или start из встречи."""
+    return m.get("start_time") or m.get("start", "")
+
+
 def calculate_hr_conflict_score(
         hr_data: Dict,
         meetings: List[Dict],
@@ -14,6 +19,8 @@ def calculate_hr_conflict_score(
     penalty = 0.0
 
     # 1. Конфликт "Отпуск vs Встречи" — КРИТИЧЕСКИЙ сигнал
+    #    Даём максимальный штраф независимо от количества встреч,
+    #    потому что сам факт встреч в отпуске уже = серьёзный конфликт
     if hr_data.get("on_vacation", False) and meetings:
         penalty += 0.6  # Базовый штраф
 
@@ -23,7 +30,8 @@ def calculate_hr_conflict_score(
 
     outside_schedule_count = 0
     for m in meetings:
-        start_h = int(m["start"].split("T")[1].split(":")[0])
+        start_str = _get_start(m)
+        start_h = int(start_str.split("T")[1].split(":")[0])
         if start_h < official_start or start_h >= official_end:
             outside_schedule_count += 1
 

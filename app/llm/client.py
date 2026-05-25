@@ -43,8 +43,10 @@ def _parse_json_response(text: str) -> List[str]:
         return []
 
 def _clean_recommendations(recs: List[str]) -> List[str]:
+    """Вырезает технические имена метрик из рекомендаций"""
     cleaned = []
     for r in recs:
+        # Убираем паттерны вида "H_i_hr_conflict = 0.5" или "(L_i_workload)"
         r = re.sub(r'\b[A-Z]_i_[a-z_]+\b\s*=?\s*\d*\.?\d*', '', r)
         r = re.sub(r'\s+', ' ', r).strip()
         if r:
@@ -53,6 +55,7 @@ def _clean_recommendations(recs: List[str]) -> List[str]:
 
 
 def _meetings_local_summary(meetings: List[Dict], profile_tz: str) -> str:
+    """Конвертирует встречи в локальное время и формирует текстовое описание для LLM."""
     if not meetings:
         return "Встреч нет."
 
@@ -63,8 +66,8 @@ def _meetings_local_summary(meetings: List[Dict], profile_tz: str) -> str:
 
     lines = []
     for i, m in enumerate(meetings, 1):
-        start_str = m.get("start", "")
-        end_str = m.get("end", "")
+        start_str = m.get("start_time") or m.get("start", "")
+        end_str = m.get("end_time") or m.get("end", "")
         try:
             start_dt = datetime.fromisoformat(start_str)
             end_dt = datetime.fromisoformat(end_str)
@@ -90,6 +93,7 @@ def generate_llm_recommendations(
     safe_profile = _make_json_safe(profile)
     safe_metrics = _make_json_safe(metrics)
 
+    # 🔒 PYTHON GUARD
     # 1. ПРОВЕРКА ОТПУСКА (берём из hr_data — отдельный параметр)
     vac_flag = (hr_data or {}).get('on_vacation')
     if vac_flag in [True, 'true', 1, '1']:
@@ -182,6 +186,8 @@ def generate_llm_recommendations(
 
 
 def generate_conflict_explanation(conflict: Dict, profile: Dict, action: str, new_time: str) -> str:
+    """LLM генерирует персонализированное пояснение по конфликту.
+    Детерминированные шаблоны используются как fallback при ошибке LLM."""
 
     safe_conflict = _make_json_safe(conflict)
     safe_profile = _make_json_safe(profile)
@@ -195,7 +201,7 @@ def generate_conflict_explanation(conflict: Dict, profile: Dict, action: str, ne
     specialization = safe_profile.get('specialization', 'не указана')
     employment = safe_profile.get('employmentType', 'FULL_TIME')
 
-    # Fallback-шаблоны (если LLM недоступен)
+    # --- Fallback-шаблоны (если LLM недоступен) ---
     key = (conflict_type, action)
     FALLBACK_MAP = {
         ("OUTSIDE_WORK_HOURS", "RESCHEDULE"):
@@ -217,7 +223,7 @@ def generate_conflict_explanation(conflict: Dict, profile: Dict, action: str, ne
         f"{full_name}, действие {action} разрешит конфликт (тип: {conflict_type})."
     )
 
-    # LLM-генерация пояснения
+    # --- LLM-генерация пояснения ---
     TYPE_LABELS = {
         "OUTSIDE_WORK_HOURS": "событие вне рабочих часов",
         "OVERLAPPING_EVENTS": "наложение событий в календаре",

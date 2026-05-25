@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Dict
 
+
 class RiskMetrics(BaseModel):
     A_i_freshness: float
     L_i_workload: float
@@ -8,12 +9,14 @@ class RiskMetrics(BaseModel):
     Z_i_timezone: float
     H_i_hr_conflict: float
 
+
 class ClassificationResult(BaseModel):
     groupId: int
     groupName: str
 
+
 class AnalyzeResponse(BaseModel):
-    userId: str
+    userId: int
     riskScore: float
     metrics: RiskMetrics
     classification: ClassificationResult

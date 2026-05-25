@@ -1,5 +1,7 @@
 import os
+import re
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from app.schemas import AnalyzeRequest, AnalyzeResponse
 from app.models import calculate_risk_score, classify_employee
 from app.recommendations.engine import generate_recommendations
@@ -12,14 +14,11 @@ from app.ml.anomaly import detector
 from dotenv import load_dotenv
 
 from app.schemas import (
-    ConflictResolveRequest, ResolutionResponse,
     ConflictResolveBatchRequest, ConflictResolveBatchResponse,
     ConflictResolutionResult
 )
 
-
-from app.conflict.resolver import resolve_conflict
-from typing import List
+from typing import List, Dict, Any
 import traceback
 
 load_dotenv()
@@ -29,6 +28,22 @@ app = FastAPI(
     description="Анализ риска выгорания и актуализации графика",
     version="2.0.0"
 )
+
+
+def _camel_to_snake(name: str) -> str:
+    """Конвертирует camelCase → snake_case."""
+    s1 = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1_\2', name)
+    return re.sub(r'([a-z\d])([A-Z])', r'\1_\2', s1).lower()
+
+
+def _to_snake_case(obj: Any) -> Any:
+    """Рекурсивно конвертирует все ключи dict из camelCase в snake_case."""
+    if isinstance(obj, dict):
+        return {_camel_to_snake(k): _to_snake_case(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_to_snake_case(i) for i in obj]
+    return obj
+
 
 @app.get("/health")
 def health():
@@ -48,7 +63,7 @@ async def resolve_conflicts_batch(request: ConflictResolveBatchRequest):
                 conflict_id=resolution.conflict_id,
                 conflict_type=resolution.conflict_type,
                 status=resolution.status,
-                recommendations=[rec.dict() for rec in resolution.recommendations],
+                recommendations=[rec.model_dump() for rec in resolution.recommendations],
                 explanation=resolution.explanation
             ))
             success_count += 1
@@ -78,7 +93,8 @@ async def resolve_conflicts_batch(request: ConflictResolveBatchRequest):
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze_user(request: AnalyzeRequest):
     try:
-        payload = request.model_dump()
+        # Конвертируем camelCase payload → snake_case для внутренней логики
+        payload = _to_snake_case(request.model_dump())
         risk_result = calculate_risk_score(payload)
         classification = classify_employee(payload, risk_result)
 
@@ -92,27 +108,18 @@ def analyze_user(request: AnalyzeRequest):
         )
 
         return AnalyzeResponse(
-            user_id=request.user_id,
-            risk_score=risk_result["risk_score"],
+            userId=request.userId,
+            riskScore=risk_result["risk_score"],
             metrics=risk_result["metrics"],
             classification=classification,
             recommendations=recommendations
         )
     except Exception as e:
         traceback.print_exc()
-        from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=500,
             content={"detail": f"Internal error: {type(e).__name__}: {str(e)}"}
         )
-
-    return AnalyzeResponse(
-        user_id=request.user_id,
-        risk_score=risk_result["risk_score"],
-        metrics=risk_result["metrics"],
-        classification=classification,
-        recommendations=recommendations
-    )
 
 @app.post("/conflicts/resolve", response_model=ResolutionResponse)
 def resolve(conflict_request: ConflictResolveRequest):
@@ -121,7 +128,6 @@ def resolve(conflict_request: ConflictResolveRequest):
         return result
     except Exception as e:
         traceback.print_exc()
-        from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=500,
             content={"detail": f"Internal error: {type(e).__name__}: {str(e)}"}

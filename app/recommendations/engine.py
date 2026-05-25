@@ -38,7 +38,7 @@ def generate_recommendations(
 
 
 def _fallback_recommendations(classification: Dict, metrics: Dict) -> List[str]:
-    group_id = classification.get("group_id")
+    group_id = classification.get("groupId")
     recs = []
 
     if group_id == 2:
@@ -58,7 +58,7 @@ def _fallback_recommendations(classification: Dict, metrics: Dict) -> List[str]:
     if group_id == 8:
         recs.append("Текущий график неэффективен. Рекомендуется встреча с тимлидом для оптимизации.")
 
-
+    # Дополнительные сигналы (без вредных советов про «увеличьте нагрузку»)
     if metrics.get("C_i_outside_hours", 0) > 0.5:
         recs.append("Более 50% встреч проходят вне рабочего графика. Это критично для баланса.")
     if metrics.get("L_i_workload", 0) > 0.9:
