@@ -7,7 +7,6 @@ import os
 
 
 def _calc_task_hours(tasks) -> float:
-    """Считает суммарные часы задач/встреч."""
     total = 0.0
     for t in tasks:
         try:
@@ -15,7 +14,6 @@ def _calc_task_hours(tasks) -> float:
             end = t.endTime if hasattr(t, 'endTime') else t.get('endTime', '')
             if start and end:
                 if hasattr(start, 'isoformat'):
-                    # Уже datetime
                     total += (end - start).total_seconds() / 3600
                 else:
                     from datetime import datetime as _dt
@@ -26,7 +24,6 @@ def _calc_task_hours(tasks) -> float:
 
 
 def _is_vacation_context(conflict, profile) -> bool:
-    """Определяет, связан ли конфликт с отпуском."""
     desc = (conflict.description or "").lower()
     return "отпуск" in desc or "vacation" in desc or conflict.type == ConflictType.WORKDAY_EXCEPTION_CONFLICT
 
@@ -59,7 +56,6 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
     if total_task_hours > 0:
         context_hints.append(f"Суммарная нагрузка от задач: {total_task_hours:.1f}ч.")
 
-    # === OUTSIDE_WORK_HOURS ===
     if conflict.type == ConflictType.OUTSIDE_WORK_HOURS:
         ref_h = ref_time.hour
         if ref_h < work_start_h:
@@ -78,9 +74,7 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
         ))
         status = "AUTO_RESOLVED"
 
-    # === OVERLAPPING_EVENTS ===
     elif conflict.type == ConflictType.OVERLAPPING_EVENTS:
-        # Для PART_TIME переносим на конец рабочего дня, а не +1ч слепо
         if is_part_time:
             new_time = ref_time.replace(hour=work_end_h - 1, minute=0)
             if new_time <= ref_time:
@@ -99,7 +93,6 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
         ))
         status = "OPTIONS_PROVIDED"
 
-    # === OVERLOAD ===
     elif conflict.type == ConflictType.OVERLOAD:
         if is_part_time and total_task_hours > 4:
             recommendations.append(Recommendation(
@@ -125,11 +118,10 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
         ))
         status = "MANUAL_REVIEW"
 
-    # === WORKDAY_EXCEPTION_CONFLICT ===
     elif conflict.type == ConflictType.WORKDAY_EXCEPTION_CONFLICT:
         severity = conflict.severity
 
-        # Ключевая логика: высокая критичность + отпуск → CANCEL первый
+        # Ключевая логика: высокая критичность + отпуск
         if severity >= 4 and vacation_conflict:
             # Сначала CANCEL — критический конфликт при отпуске
             recommendations.append(Recommendation(
@@ -173,7 +165,7 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
         explanation = "Неизвестный тип конфликта. Требуется анализ вручную."
         status = "MANUAL_REVIEW"
 
-    # === LLM-блок ===
+    # LLM блок
     use_llm = os.getenv("USE_LLM_RECOMMENDATIONS", "false").lower() == "true"
     if use_llm and recommendations:
         try:
@@ -220,7 +212,6 @@ def resolve_conflict(request: ConflictResolveRequest) -> ResolutionResponse:
 
 
 def _fallback_explanation(conflict, recommendations, profile) -> str:
-    """Детерминированный fallback для explanation."""
     name = f"{profile.name} {profile.surname}".strip()
     best = recommendations[0] if recommendations else None
     if not best:

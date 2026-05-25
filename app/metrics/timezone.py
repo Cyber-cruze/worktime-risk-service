@@ -19,7 +19,7 @@ def calculate_timezone_mismatch(
     try:
         tz = zoneinfo.ZoneInfo(profile_tz)
     except Exception:
-        return 0.5  # Fallback при неверном поясе
+        return 0.5
 
     work_start = int(profile.get("work_hours", {}).get("start", "09:00").split(":")[0])
     work_end = int(profile.get("work_hours", {}).get("end", "18:00").split(":")[0])
