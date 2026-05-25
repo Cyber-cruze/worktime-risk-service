@@ -9,12 +9,12 @@ class RiskMetrics(BaseModel):
     H_i_hr_conflict: float
 
 class ClassificationResult(BaseModel):
-    group_id: int
-    group_name: str
+    groupId: int
+    groupName: str
 
 class AnalyzeResponse(BaseModel):
-    user_id: str
-    risk_score: float
+    userId: str
+    riskScore: float
     metrics: RiskMetrics
     classification: ClassificationResult
     recommendations: List[str]
