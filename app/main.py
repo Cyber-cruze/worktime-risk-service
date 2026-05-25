@@ -138,12 +138,14 @@ def resolve(conflict_request: ConflictResolveRequest):
 def predict_conflict_api(request: ConflictResolveRequest):
     profile_dict = request.profile.model_dump()
     tasks_list = [t.model_dump() for t in request.tasks]
+    conflict_dict = request.conflict.model_dump(mode='json')
 
-    prob = predictor.predict(profile_dict, tasks_list)
+    prob = predictor.predict(profile_dict, tasks_list, conflict_dict)
+    factors = predictor.get_risk_factors(prob, conflict_dict)
 
     return PredictionResponse(
         conflict_probability=prob,
-        top_risk_factors=["High meeting density"] if prob > 0.5 else ["Normal load"],
+        top_risk_factors=factors,
         forecast_days=7
     )
 

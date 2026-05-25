@@ -72,4 +72,9 @@ def calculate_workload_metrics(
 
     C_i = (outside_count / len(meetings)) if meetings else 0.0
 
-    return {"L_i": round(L_i, 3), "C_i": round(min(C_i, 1.0), 3)}
+    return {
+        "L_i": round(L_i, 3),
+        "C_i": round(min(C_i, 1.0), 3),
+        "total_task_hours": round(task_hours, 2),
+        "total_meeting_hours": round(meeting_hours, 2)
+    }

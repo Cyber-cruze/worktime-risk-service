@@ -93,11 +93,21 @@ def generate_llm_recommendations(
     safe_profile = _make_json_safe(profile)
     safe_metrics = _make_json_safe(metrics)
 
-    # 🔒 PYTHON GUARD
+    # 🔒 PYTHON GUARDS
+    # Гvardы добавляют КРИТИЧЕСКИЕ рекомендации, но НЕ обрывают остальной анализ.
+    guard_recs = []
+
     # 1. ПРОВЕРКА ОТПУСКА (берём из hr_data — отдельный параметр)
     vac_flag = (hr_data or {}).get('on_vacation')
-    if vac_flag in [True, 'true', 1, '1']:
-        return ["Сотрудник официально в отпуске. Встречи в календаре требуют ручного подтверждения или отмены."]
+    is_vacation = vac_flag in [True, 'true', 1, '1']
+
+    if is_vacation:
+        guard_recs.append("Сотрудник официально в отпуске. Встречи в календаре требуют ручного подтверждения или отмены.")
+        if meetings:
+            guard_recs.append(f"В календаре {len(meetings)} встреч во время отпуска — необходима ручная проверка каждой.")
+        official_schedule = (hr_data or {}).get('official_schedule', 'не указан')
+        guard_recs.append(f"Официальный график HR: {official_schedule}. При отпуске все рабочие события должны быть отменены или перенесены.")
+        return guard_recs
 
     # 2. ПРОВЕРКА PART-TIME
     emp_raw = safe_profile.get('employmentType') or safe_profile.get('employment', 'FULL_TIME')
@@ -106,7 +116,13 @@ def generate_llm_recommendations(
     total_hours = safe_metrics.get('total_task_hours', 0) or safe_metrics.get('hours', 0)
 
     if emp_type == 'PART_TIME' and (workload > 0.3 or total_hours > 4):
-        return ["Нагрузка превышает лимит для PART_TIME. Рекомендуется сократить задачи или пересмотреть контракт."]
+        guard_recs.append("Нагрузка превышает лимит для PART_TIME. Рекомендуется сократить задачи или пересмотреть контракт.")
+        if workload > 0.5:
+            guard_recs.append(f"Текущая загрузка {int(workload*100)}% при допустимом лимите 50% для PART_TIME. Это серьёзный риск переутомления.")
+        guard_recs.append("Обсудите с руководителем возможность перехода на FULL_TIME или сокращения объёма задач.")
+        if metrics.get('C_i_outside_hours', 0) > 0.3:
+            guard_recs.append("Часть встреч проходит вне согласованного графика — перенесите их в рабочие часы PART_TIME.")
+        return guard_recs
 
     name = safe_profile.get("name", "Коллега")
     surname = safe_profile.get("surname", "")
@@ -185,7 +201,14 @@ def generate_llm_recommendations(
         return []
 
 
-def generate_conflict_explanation(conflict: Dict, profile: Dict, action: str, new_time: str) -> str:
+def generate_conflict_explanation(
+        conflict: Dict,
+        profile: Dict,
+        action: str,
+        new_time: str,
+        all_actions: str = "",
+        context_hints: str = ""
+) -> str:
     """LLM генерирует персонализированное пояснение по конфликту.
     Детерминированные шаблоны используются как fallback при ошибке LLM."""
 
@@ -193,6 +216,7 @@ def generate_conflict_explanation(conflict: Dict, profile: Dict, action: str, ne
     safe_profile = _make_json_safe(profile)
 
     full_name = f"{safe_profile.get('name', 'Коллега')} {safe_profile.get('surname', '')}".strip() or "Коллега"
+    first_name = safe_profile.get('name', 'Коллега')
     conflict_type = safe_conflict.get('type', 'UNKNOWN')
     conflict_desc = safe_conflict.get('description', 'не указано')
     conflict_severity = safe_conflict.get('severity', 3)
@@ -200,27 +224,30 @@ def generate_conflict_explanation(conflict: Dict, profile: Dict, action: str, ne
     work_end = safe_profile.get('workEnd', '18:00:00')[:5]
     specialization = safe_profile.get('specialization', 'не указана')
     employment = safe_profile.get('employmentType', 'FULL_TIME')
+    is_part_time = str(employment).upper() == "PART_TIME"
 
     # --- Fallback-шаблоны (если LLM недоступен) ---
     key = (conflict_type, action)
     FALLBACK_MAP = {
         ("OUTSIDE_WORK_HOURS", "RESCHEDULE"):
-            f"{full_name}, перенос на {new_time} вернёт встречу в рабочий график ({work_start}–{work_end}).",
+            f"{full_name}, событие вне рабочих часов ({work_start}–{work_end}). Перенесено на {new_time}.",
         ("OVERLAPPING_EVENTS", "RESCHEDULE"):
-            f"{full_name}, перенос на {new_time} устранит наложение событий, освободив слот для приоритетных задач.",
+            f"{full_name}, наложение событий устранено переносом на {new_time}." + (f" В рамках графика PART_TIME ({work_start}–{work_end})." if is_part_time else ""),
         ("OVERLAPPING_EVENTS", "SPLIT"):
             f"{full_name}, разделение встречи на две части позволит уложиться в оба слота без наложения.",
         ("OVERLOAD", "DELEGATE"):
-            f"{full_name}, делегирование задачи освободит календарь для ключевых активностей.",
+            f"{full_name}, делегирование задачи освободит календарь для ключевых активностей." + (f" Лимит PART_TIME: 4ч в день." if is_part_time else ""),
         ("OVERLOAD", "RESCHEDULE"):
-            f"{full_name}, перенос задачи на следующий спринт снизит текущую перегрузку.",
+            f"{full_name}, перенос задачи на следующий рабочий день ({work_start}) снизит текущую перегрузку.",
         ("WORKDAY_EXCEPTION_CONFLICT", "KEEP"):
-            f"{full_name}, событие подтверждено HR — оставляем в календаре без изменений.",
+            f"{full_name}, событие оставлено — проверьте подтверждение статуса в HR-системе.",
         ("WORKDAY_EXCEPTION_CONFLICT", "CANCEL"):
-            f"{full_name}, отмена события снимет конфликт и освободит время для текущих задач.",
+            f"{full_name}, критический конфликт с отпуском/исключением — событие отменено." + (f" Перенос возможно после возвращения." if conflict_severity >= 4 else ""),
+        ("WORKDAY_EXCEPTION_CONFLICT", "RESCHEDULE"):
+            f"{full_name}, событие перенесено на {new_time} — после окончания отпуска/исключения.",
     }
     fallback = FALLBACK_MAP.get(key,
-        f"{full_name}, действие {action} разрешит конфликт (тип: {conflict_type})."
+        f"{first_name}, действие «{action}» разрешит конфликт (тип: {conflict_type}, критичность: {conflict_severity}/5)."
     )
 
     # --- LLM-генерация пояснения ---
@@ -228,7 +255,7 @@ def generate_conflict_explanation(conflict: Dict, profile: Dict, action: str, ne
         "OUTSIDE_WORK_HOURS": "событие вне рабочих часов",
         "OVERLAPPING_EVENTS": "наложение событий в календаре",
         "OVERLOAD": "перегрузка по задачам",
-        "WORKDAY_EXCEPTION_CONFLICT": "конфликт с рабочим исключением",
+        "WORKDAY_EXCEPTION_CONFLICT": "конфликт с рабочим исключением (отпуск/больничный)",
     }
     ACTION_LABELS = {
         "RESCHEDULE": "перенос",
@@ -240,16 +267,55 @@ def generate_conflict_explanation(conflict: Dict, profile: Dict, action: str, ne
     type_label = TYPE_LABELS.get(conflict_type, conflict_type)
     action_label = ACTION_LABELS.get(action, action)
 
-    system_prompt = """Ты — AI-аналитик конфликтов рабочего календаря. Сформулируй одно персонализированное пояснение на русском языке.
+    # Тип-специфичные правила для промпта
+    type_rules = ""
+    if conflict_type == "WORKDAY_EXCEPTION_CONFLICT" and conflict_severity >= 4:
+        type_rules = """
+КРИТИЧЕСКИ: критичность 4-5 + отпуск/исключение = событие НЕЛЬЗЯ оставлять.
+Объясни, что событие отменено или перенесено на после отпуска.
+НЕ пиши «оставлено без изменений» — это неправильно при высокой критичности."""
+    elif conflict_type == "OUTSIDE_WORK_HOURS":
+        type_rules = f"""
+Обязательно укажи: 1) что событие было ВНЕ рабочих часов ({work_start}–{work_end}),
+2) конкретное время, на которое перенесено ({new_time}),
+3) почему это важно (снижение риска выгорания, соблюдение графика)."""
+    elif conflict_type == "OVERLAPPING_EVENTS" and is_part_time:
+        type_rules = f"""
+Упомяни, что сотрудник на PART_TIME с графиком {work_start}–{work_end}.
+Перенос должен быть в рамках этого окна."""
+
+    system_prompt = f"""Ты — AI-аналитик конфликтов рабочего календаря. Сформулируй ОДНО персонализированное пояснение для сотрудника на русском языке.
 
 ПРАВИЛА:
-- Обращайся к сотруднику по имени.
-- Укажи конкретное действие и причину из данных.
+- Обращайся по имени на «вы»: «{first_name}, ...»
+- Укажи: 1) ЧТО произошло, 2) ПОЧЕМУ это проблема, 3) КАКОЕ действие принято, 4) ЧТО это даёт.
 - Упомяни рабочие часы и новое время, если действие — перенос.
-- Тон: профессиональный, конкретный, без воды.
+- Если PART_TIME — упомяни лимит графика.
+- Тон: профессиональный, конкретный, уважительный. Без панибратства.
 - ЗАПРЕЩЕНО: выдумывать факты, которых нет в данных.
-- ЗАПРЕЩЕНО: общие фразы вроде «следите за балансом» или «обратите внимание».
-- Формат: ТОЛЬКО JSON {"explanation": "текст пояснения"}"""
+- ЗАПРЕЩЕНО: общие фразы вроде «следите за балансом», «обратите внимание», «если возникнут вопросы — обращайтесь».
+- ЗАПРЕЩЕНО: писать «Здравствуйте» — обращайся сразу по имени.
+- ЗАПРЕЩЕНО: «у тебя», «ты» — только «у вас», «вы».
+- ЗАПРЕЩЕНО: говорить от первого лица: «я отменяю», «я рекомендую» — используй безличную форму: «событие отменено», «рекомендуется отмена», «перенесено на».
+- ЗАПРЕЩЕНО: вода в конце («обращайтесь», «если будут вопросы», «будьте здоровы»). Заканчивай на факте.
+{type_rules}
+- Формат: ТОЛЬКО JSON {{"explanation": "текст пояснения"}}"""
+
+    # Контекстные подсказки
+    hints_section = ""
+    if context_hints and context_hints != "нет":
+        hints_section = f"""
+<контекстные_подсказки>
+{context_hints}
+</контекстные_подсказки>"""
+
+    # Все доступные действия
+    actions_section = ""
+    if all_actions:
+        actions_section = f"""
+<все_варианты_действий>
+Выбрано основное: {action_label}. Все варианты: {all_actions}
+</все_варианты_действий>"""
 
     user_prompt = f"""<context>
 Сотрудник: {full_name}
@@ -268,7 +334,7 @@ def generate_conflict_explanation(conflict: Dict, profile: Dict, action: str, ne
 Действие: {action_label}
 Новое время: {new_time}
 </action>
-
+{hints_section}{actions_section}
 Сформулируй пояснение для сотрудника. Верни ТОЛЬКО JSON."""
 
     try:
@@ -279,9 +345,9 @@ def generate_conflict_explanation(conflict: Dict, profile: Dict, action: str, ne
                 {"role": "user", "content": user_prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.3,
-            max_tokens=150,
-            timeout=10.0
+            temperature=0.2,
+            max_tokens=200,
+            timeout=12.0
         )
         raw = response.choices[0].message.content.strip()
         data = json.loads(raw)
