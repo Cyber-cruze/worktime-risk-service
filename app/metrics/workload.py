@@ -9,7 +9,6 @@ import zoneinfo
 
 
 def _to_local_hour(dt_str: str, profile_tz: str) -> int:
-    """Конвертирует ISO-строку (UTC / с таймзоной) в локальный час сотрудника."""
     dt = datetime.fromisoformat(dt_str)
     # Если datetime наивный — считаем что уже в локальном времени
     if dt.tzinfo is None:
@@ -23,18 +22,17 @@ def _to_local_hour(dt_str: str, profile_tz: str) -> int:
     return local_dt.hour
 
 
+# Берёт start_time или start из встречи/задачи
 def _get_start(m: Dict) -> str:
-    """Берёт start_time или start из встречи/задачи."""
     return m.get("start_time") or m.get("start", "")
 
 
+# Берёт end_time или end из встречи/задачи
 def _get_end(m: Dict) -> str:
-    """Берёт end_time или end из встречи/задачи."""
     return m.get("end_time") or m.get("end", "")
 
 
 def _parse_hours(m: Dict) -> float:
-    """Считает длительность в часах (корректно для UTC и наивных строк)."""
     start_str = _get_start(m)
     end_str = _get_end(m)
     if not start_str or not end_str:

@@ -13,6 +13,8 @@ from app.ml.scorer import scorer
 from app.ml.anomaly import detector
 from dotenv import load_dotenv
 
+from app.chat.router import router as chat_router
+
 from app.schemas import (
     ConflictResolveBatchRequest, ConflictResolveBatchResponse,
     ConflictResolutionResult
@@ -29,15 +31,16 @@ app = FastAPI(
     version="2.0.0"
 )
 
+app.include_router(chat_router)
 
 def _camel_to_snake(name: str) -> str:
-    """Конвертирует camelCase → snake_case."""
+
     s1 = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1_\2', name)
     return re.sub(r'([a-z\d])([A-Z])', r'\1_\2', s1).lower()
 
 
 def _to_snake_case(obj: Any) -> Any:
-    """Рекурсивно конвертирует все ключи dict из camelCase в snake_case."""
+
     if isinstance(obj, dict):
         return {_camel_to_snake(k): _to_snake_case(v) for k, v in obj.items()}
     if isinstance(obj, list):
@@ -93,7 +96,7 @@ async def resolve_conflicts_batch(request: ConflictResolveBatchRequest):
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze_user(request: AnalyzeRequest):
     try:
-        # Конвертируем camelCase payload → snake_case для внутренней логики
+
         payload = _to_snake_case(request.model_dump())
         risk_result = calculate_risk_score(payload)
         classification = classify_employee(payload, risk_result)

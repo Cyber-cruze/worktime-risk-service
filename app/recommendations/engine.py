@@ -15,7 +15,6 @@ def generate_recommendations(
     print(f"DEBUG: use_llm={use_llm}, profile={profile is not None}")
 
     if use_llm and profile:
-        # Ленивый импорт — избегаем circular import на старте
         from app.llm.client import generate_llm_recommendations
 
         print("DEBUG: Вызываем LLM...")
