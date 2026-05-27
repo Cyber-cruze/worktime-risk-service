@@ -214,15 +214,20 @@ def _build_analyze_payload(context: Dict[str, Any]) -> Dict[str, Any]:
 
     # Адаптация: ProfileSchema -> AnalyzeRequest.Profile формат
     if "workStart" in profile and "work_hours" not in profile:
-        # Это формат из conflict_schemas
+        # Это формат из conflict_schemas — преобразуем в формат risk_calculator
+        last_updated = (
+                profile.get("updatedAt")
+                or profile.get("last_updated")
+                or ""
+        )
         profile = {
             "work_hours": {
                 "start": profile.get("workStart", "09:00:00")[:5],
                 "end": profile.get("workEnd", "18:00:00")[:5],
             },
             "timezone": profile.get("timezone", "UTC"),
-            "last_updated": profile.get("updatedAt", ""),
-            "employment": profile.get("employmentType", "FULL_TIME"),
+             "last_updated": last_updated,
+            "employment": profile.get("employmentType", profile.get("employment", "FULL_TIME")),
         }
 
     # Адаптация: TaskSchema (startTime/endTime) -> Task (hours)
