@@ -172,7 +172,6 @@ class ConflictPredictor:
         return round(min(max(prob, 0.05), 0.95), 3)
 
     def get_risk_factors(self, prob: float, conflict: Optional[Dict] = None) -> List[str]:
-        """Возвращает осмысленные факторы риска вместо захардкоженных."""
         factors = []
         if conflict:
             ctype = str(conflict.get("type", "")).upper()

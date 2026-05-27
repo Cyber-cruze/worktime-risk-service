@@ -178,7 +178,7 @@ def generate_llm_recommendations(
     if not facts:
         facts.append("показатели в норме")
 
-    # ── Промпт ──
+    # Промпт
     system_prompt = """Ты — аналитик рабочих графиков. Дай 1-2 рекомендации.
 
 Правила:
