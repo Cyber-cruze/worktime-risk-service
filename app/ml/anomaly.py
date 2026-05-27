@@ -44,21 +44,20 @@ class AnomalyDetector:
             print(f"[anomaly] Ошибка загрузки pkl: {e}. Используем dummy.")
 
     def _train_dummy_model(self):
-        """Калиброванная dummy IsolationForest на 4 фичи."""
         rng = np.random.RandomState(42)
-        # Нормальные расписания: 2-5 событий, 4-8ч, плотность 0.4-0.7, окон >=1
+
         X_normal = np.column_stack([
-            rng.uniform(2, 6, 80),     # event_count
-            rng.uniform(4, 8, 80),     # total_hours
-            rng.uniform(0.3, 0.7, 80), # density
-            rng.uniform(0, 3, 80),     # gaps (есть окна)
+            rng.uniform(2, 6, 80),
+            rng.uniform(4, 8, 80),
+            rng.uniform(0.3, 0.7, 80),
+            rng.uniform(0, 3, 80),
         ])
-        # Аномалии: 7+ событий, 9+ часов, плотность >0.85, окон нет
+
         X_anomaly = np.column_stack([
-            rng.uniform(7, 12, 20),     # много событий
-            rng.uniform(9, 14, 20),     # переработка
-            rng.uniform(0.85, 1.0, 20), # почти без окон
-            rng.uniform(-1, 0.5, 20),   # нет перерывов
+            rng.uniform(7, 12, 20),
+            rng.uniform(9, 14, 20),
+            rng.uniform(0.85, 1.0, 20),
+            rng.uniform(-1, 0.5, 20),
         ])
         X = np.vstack([X_normal, X_anomaly])
         model = IsolationForest(contamination=0.2, random_state=42)
@@ -74,7 +73,7 @@ class AnomalyDetector:
             return 0
 
     def extract_features(self, tasks: List[Dict]) -> np.ndarray:
-        """4 фичи: event_count, total_hours, density, gaps."""
+
         event_count = len(tasks)
 
         total_hours = 0.0
@@ -92,17 +91,16 @@ class AnomalyDetector:
             except Exception:
                 pass
 
-        # Сортируем по start
+
         intervals.sort(key=lambda x: x[0])
 
-        # Плотность: занятое_время / (последний_end - первый_start)
+
         if len(intervals) >= 2:
             span_hours = (intervals[-1][1] - intervals[0][0]).total_seconds() / 3600
             density = total_hours / span_hours if span_hours > 0 else 0
         else:
-            density = 0.5  # одно событие — средняя плотность
+            density = 0.5
 
-        # Количество окон (пауз >= 30 мин между событиями)
         gaps = 0
         for i in range(1, len(intervals)):
             gap_min = (intervals[i][0] - intervals[i-1][1]).total_seconds() / 60
@@ -122,7 +120,7 @@ class AnomalyDetector:
 
         X = self.extract_features(tasks)
 
-        # Rule-based проверки (быстрые и точные)
+        # Rule-based проверки
         event_count = len(tasks)
         total_hours = X[0][1]
         density = X[0][2]

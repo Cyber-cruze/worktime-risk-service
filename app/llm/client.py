@@ -48,7 +48,6 @@ def _parse_json_response(text: str) -> List[str]:
 
 
 def _clean_recommendations(recs: List[str]) -> List[str]:
-    """Убирает технические метрики, обрезает до 2 рекомендаций по 2 предложения."""
     cleaned = []
     for r in recs[:2]:
         r = re.sub(r'\b[A-Z]_i_[a-z_]+\b\s*=?\s*\d*\.?\d*', '', r)
@@ -99,7 +98,6 @@ def _meetings_local_summary(meetings: List[Dict], profile_tz: str) -> str:
 
 
 def _count_outside_meetings(meetings: List[Dict], work_start: str, work_end: str, profile_tz: str):
-    """Возвращает (кол-во вне-графиковых встреч, список их часов)."""
     if not meetings:
         return 0, []
     try:
@@ -133,7 +131,6 @@ def generate_llm_recommendations(
     safe_profile = _make_json_safe(profile)
     safe_metrics = _make_json_safe(metrics)
 
-    # ── Guard: отпуск — ответ однозначный, LLM не нужна ──
     vac_flag = (hr_data or {}).get('on_vacation')
     is_vacation = vac_flag in [True, 'true', 1, '1']
     if is_vacation:
@@ -181,7 +178,7 @@ def generate_llm_recommendations(
     if not facts:
         facts.append("показатели в норме")
 
-    # ── Промпт ──
+    # Промпт
     system_prompt = """Ты — аналитик рабочих графиков. Дай 1-2 рекомендации.
 
 Правила:
@@ -317,7 +314,7 @@ def generate_conflict_explanation(
     elif conflict_type == "OVERLOAD" and is_part_time:
         type_rules = f"У сотрудника неполный рабочий день, лимит 4 часа в день."
 
-    # ── Промпт ──
+    # Промпт
     system_prompt = f"""Аналитик конфликтов календаря. Дай 1-2 предложения пояснения.
 
 Правила:

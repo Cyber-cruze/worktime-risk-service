@@ -8,12 +8,10 @@ import zoneinfo
 
 
 def _get_start(m: Dict) -> str:
-    """Берёт start_time или start из встречи."""
     return m.get("start_time") or m.get("start", "")
 
 
 def _to_local_hour(dt_str: str, tz_name: str = "UTC") -> int:
-    """Конвертирует ISO-строку в локальный час."""
     dt = datetime.fromisoformat(dt_str)
     if dt.tzinfo is None:
         return dt.hour
