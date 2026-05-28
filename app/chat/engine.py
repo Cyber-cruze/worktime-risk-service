@@ -51,7 +51,9 @@ INTENT_KEYWORDS: Dict[str, list] = {
 
 
 def detect_intent(message: str) -> str:
-
+    """Определяет намерение пользователя по ключевым словам
+    Возвращает имя инструмента или "general" если ничего не подошло
+    """
     msg_lower = message.lower().strip()
 
     scores: Dict[str, int] = {}
@@ -66,9 +68,11 @@ def detect_intent(message: str) -> str:
     return "general"
 
 
+
 # 2. ВЫЗОВ ИНСТРУМЕНТА
 def call_tool(intent: str, context: Dict[str, Any]) -> Optional[ToolResult]:
-
+    """Вызывает внутренний инструмент по имени интента
+    """
     if intent == "general":
         return None
 
@@ -85,8 +89,13 @@ def call_tool(intent: str, context: Dict[str, Any]) -> Optional[ToolResult]:
 
 
 # 3. ГЕНЕРАЦИЯ ОТВЕТА ЧЕРЕЗ LLM
-def _format_tool_data(tool_result: ToolResult) -> str:
+def _format_tool_data(tool_result: ToolResult, role: str = "employee") -> str:
+    """Форматирует результат инструмента для вставки в промпт LLM
 
+    Args:
+        role: внутренний формат роли (employee / pm / both)
+              Фильтрует рекомендации — показывает только релевантные
+    """
     if not tool_result.success:
         return f"Ошибка при вызове инструмента {tool_result.tool_name}: {tool_result.error}"
 
@@ -96,13 +105,30 @@ def _format_tool_data(tool_result: ToolResult) -> str:
         metrics = data.get("metrics", {})
         classification = data.get("classification", {})
         recs = data.get("recommendations", {})
-
+        # recommendations: {"employee": [...], "pm": [...]}
+        # фильтруем по роли
         if isinstance(recs, dict):
-            recs_text = "; ".join(recs.get("employee", []) + recs.get("pm", []))
+            relevant_recs = []
+            if role in ("employee", "both"):
+                relevant_recs.extend(recs.get("employee", []))
+            if role in ("pm", "both"):
+                relevant_recs.extend(recs.get("pm", []))
+            recs_text = "; ".join(relevant_recs) if relevant_recs else "нет"
         elif isinstance(recs, list):
             recs_text = "; ".join(recs)
         else:
             recs_text = "нет"
+
+        # группа: показываем только если она определена
+        g_id = classification.get("groupId") or classification.get("group_id")
+        g_name = classification.get("groupName") or classification.get("group_name")
+        if g_id and g_name:
+            group_line = f"Группа: {g_id} — {g_name}\n"
+        elif g_name:
+            group_line = f"Группа: {g_name}\n"
+        else:
+            group_line = ""
+
         return (
             f"Риск выгорания: {data.get('risk_score', 'N/A')}\n"
             f"Метрики:\n"
@@ -111,7 +137,7 @@ def _format_tool_data(tool_result: ToolResult) -> str:
             f"  — Уровень загрузки: {metrics.get('L_i_workload', 'N/A')}\n"
             f"  — Часовой пояс (риск): {metrics.get('Z_i_timezone', 'N/A')}\n"
             f"  — Конфликт HR и календаря: {metrics.get('H_i_hr_conflict', 'N/A')}\n"
-            f"Группа: {classification.get('groupId', classification.get('group_id', 'N/A'))} — {classification.get('groupName', classification.get('group_name', 'N/A'))}\n"
+            f"{group_line}"
             f"Рекомендации: {recs_text}"
         )
 
@@ -158,7 +184,9 @@ def _format_tool_data(tool_result: ToolResult) -> str:
 
 
 def _build_history_messages(history: List[ChatMessage], max_turns: int = 6) -> List[Dict[str, str]]:
-
+    """Конвертирует историю чата в формат messages для LLM
+    Берём последние max_turns пар (user + assistant) чтобы не превышать контекст
+    """
     if not history:
         return []
 
@@ -179,7 +207,9 @@ def generate_chat_response(
     context: Dict[str, Any],
     history: List[ChatMessage] = None,
 ) -> str:
-
+    """Генерирует ответ на русском языке через LLM.
+    Если LLM недоступна — возвращает шаблонный ответ.
+    """
     profile = context.get("profile", {})
     name = profile.get("name", "")
     surname = profile.get("surname", "")
@@ -200,9 +230,13 @@ def generate_chat_response(
         "CONTRACT": "контракт",
     }.get(str(employment).upper().replace("-", "_"), str(employment))
 
-    # Данные инструмента
+    # Роль пользователя (employee / pm)
+    role = normalize_role(context.get("role", ""))
+    is_pm = role == "pm"
+
+    # Данные инструмента (передаём роль для фильтрации рекомендаций)
     if tool_result:
-        tool_data_text = _format_tool_data(tool_result)
+        tool_data_text = _format_tool_data(tool_result, role=role)
     elif intent == "general":
         tool_data_text = "Инструмент не вызывался — общий вопрос пользователя."
     else:
@@ -210,7 +244,6 @@ def generate_chat_response(
 
     # Разный системный промпт для general и tool-based
     # Адаптируем тон под роль (employee / pm)
-    is_pm = normalize_role(context.get("role", "")) == "pm"
 
     if intent == "general":
         if is_pm:
@@ -278,12 +311,19 @@ def generate_chat_response(
 
 Формат ответа: ТОЛЬКО JSON {"answer": "ваш ответ"}"""
 
-    user_prompt = f"""<сотрудник>
+    # Адаптируем user_prompt под роль
+    subject_label = "сотрудник"
+    if is_pm:
+        question_instruction = "Ответь на вопрос Project Manager'а о сотруднике на основе данных инструмента и контекста разговора."
+    else:
+        question_instruction = "Ответь на вопрос сотрудника на основе данных инструмента и контекста разговора."
+
+    user_prompt = f"""<{subject_label}>
 Имя: {full_name}
 Специализация: {specialization}
 Тип занятости: {employment_ru}
 Рабочие часы: {work_start}–{work_end}
-</сотрудник>
+</{subject_label}>
 
 <вопрос_пользователя>
 {message}
@@ -293,7 +333,7 @@ def generate_chat_response(
 {tool_data_text}
 </результат_инструмента>
 
-Ответь на вопрос сотрудника на основе данных инструмента и контекста разговора. Верни ТОЛЬКО JSON."""
+{question_instruction} Верни ТОЛЬКО JSON."""
 
     # Собираем сообщения для LLM: system + history + текущий user_prompt
     llm_messages = [{"role": "system", "content": system_prompt}]
@@ -328,7 +368,9 @@ def generate_chat_response(
         print(f"[chat engine] LLM ошибка: {e}")
 
     # Fallback — шаблонный ответ без LLM
-    return _fallback_response(message, intent, tool_result, full_name)
+    if tool_result and tool_result.success:
+        print(f"[chat engine] LLM fallback. tool_data keys: {list((tool_result.data or {}).keys())}, classification: {tool_result.data.get('classification')}")
+    return _fallback_response(message, intent, tool_result, full_name, is_pm=is_pm)
 
 
 def _fallback_response(
@@ -336,9 +378,21 @@ def _fallback_response(
     intent: str,
     tool_result: Optional[ToolResult],
     full_name: str,
+    is_pm: bool = False,
 ) -> str:
-    # Шаблонный ответ если LLM недоступна
+    """Шаблонный ответ если LLM недоступна.
+
+    Args:
+        is_pm: если True — ответ формулируется для Project Manager
+               (обращение «у сотрудника», «вашей команды»).
+    """
     if intent == "general":
+        if is_pm:
+            return (
+                "Я умею анализировать рабочие графики сотрудников. "
+                "Спросите о риске выгорания сотрудника, оценке расписания, "
+                "прогнозе конфликтов, аномалиях или разрешении конфликтов."
+            )
         return (
             f"{full_name}, я умею анализировать рабочие графики. "
             "Спросите меня о риске выгорания, оценке расписания, "
@@ -347,6 +401,8 @@ def _fallback_response(
 
     if not tool_result or not tool_result.success:
         error_msg = tool_result.error if tool_result else "нет данных"
+        if is_pm:
+            return f"Не удалось получить данные по сотруднику ({error_msg}). Попробуйте переформулировать вопрос."
         return f"{full_name}, не удалось получить данные ({error_msg}). Попробуйте переформулировать вопрос."
 
     data = tool_result.data or {}
@@ -354,33 +410,51 @@ def _fallback_response(
     if intent == "analyze":
         risk = data.get("risk_score", 0)
         level = "низкий" if risk < 0.3 else "средний" if risk < 0.6 else "высокий"
-        group_name = data.get("classification", {}).get("group_name", "не определена")
-        return f"{full_name}, ваш уровень риска выгорания — {level} ({risk:.0%}). Группа: {group_name}."
+        cls = data.get("classification") or {}
+        g_name = cls.get("groupName") or cls.get("group_name") or ""
+        # группа: показываем только если она определена
+        group_part = f" Группа: {g_name}." if g_name else ""
+        if is_pm:
+            return f"Уровень риска выгорания сотрудника {full_name} — {level} ({risk:.0%}).{group_part}"
+        return f"{full_name}, ваш уровень риска выгорания — {level} ({risk:.0%}).{group_part}"
 
     if intent == "predict":
         prob = data.get("conflict_probability", 0)
+        if is_pm:
+            return f"Вероятность конфликта у сотрудника {full_name} — {prob:.0%} на ближайшие 7 дней."
         return f"{full_name}, вероятность конфликта — {prob:.0%} на ближайшие 7 дней."
 
     if intent == "score":
         score = data.get("quality_score", 0)
         grade = data.get("grade", "?")
+        if is_pm:
+            return f"Оценка расписания сотрудника {full_name} — {score}/100 (класс {grade})."
         return f"{full_name}, оценка вашего расписания — {score}/100 (класс {grade})."
 
     if intent == "anomalies":
         is_anom = data.get("is_anomalous", False)
         if is_anom:
+            if is_pm:
+                return f"В графике сотрудника {full_name} обнаружены аномалии. Рекомендуется проверить расписание."
             return f"{full_name}, в вашем графике обнаружены аномалии. Проверьте расписание на необычные паттерны."
+        if is_pm:
+            return f"Аномалий в графике сотрудника {full_name} не обнаружено. Расписание в пределах нормы."
         return f"{full_name}, аномалий в графике не обнаружено. Расписание в пределах нормы."
 
     if intent == "conflicts":
         explanation = data.get("explanation", "")
+        if is_pm:
+            return f"Конфликт сотрудника {full_name} проанализирован. {explanation}" if explanation else f"Конфликт сотрудника {full_name} проанализирован. Проверьте рекомендации."
         return f"{full_name}, {explanation}" if explanation else f"{full_name}, конфликт проанализирован. Проверьте рекомендации."
 
+    if is_pm:
+        return "Запрос обработан. Проверьте данные в панели управления командой."
     return f"{full_name}, ваш запрос обработан. Проверьте данные в личном кабинете."
 
 
 
 # ГЛАВНЫЙ МЕТОД
+
 def process_chat(request: ChatRequest) -> ChatResponse:
     """Основной пайплайн чат-ассистента.
 
