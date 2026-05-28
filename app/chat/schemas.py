@@ -4,10 +4,8 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 
-# ─────────────────────────────────────────────
-# Сообщения в истории чата
-# ─────────────────────────────────────────────
 
+# Сообщения в истории чата
 class ChatMessage(BaseModel):
     """Одно сообщение в истории чата."""
     role: str = Field(..., description="user или assistant")
@@ -15,10 +13,8 @@ class ChatMessage(BaseModel):
     timestamp: Optional[str] = Field(None, description="ISO время сообщения")
 
 
-# ─────────────────────────────────────────────
-# Запрос
-# ─────────────────────────────────────────────
 
+# Запрос
 class ChatRequest(BaseModel):
     message: str = Field(..., description="Вопрос пользователя на естественном языке")
     session_id: Optional[str] = Field(alias="sessionId", default=None, description="ID сессии чата (для логирования)")
@@ -41,10 +37,8 @@ class ChatRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-# ─────────────────────────────────────────────
-# Внутренний тип (не в API)
-# ─────────────────────────────────────────────
 
+# Внутренний тип (не в API)
 class ToolResult(BaseModel):
     """Результат вызова внутреннего инструмента."""
     tool_name: str
@@ -53,13 +47,10 @@ class ToolResult(BaseModel):
     error: Optional[str] = None
 
 
-# ─────────────────────────────────────────────
-# Ответ
-# ─────────────────────────────────────────────
 
+# Ответ
 class ChatResponse(BaseModel):
     """Ответ чат-ассистента.
-
     Включает историю — фронтенд добавляет ответ к локальной истории
     и показывает весь список сообщений в UI.
     """
