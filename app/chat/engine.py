@@ -26,6 +26,12 @@ INTENT_KEYWORDS: Dict[str, list] = {
         "разреши конфликт", "решить конфликт",
         "что с конфликтом", "что делать с конфликтом",
         "устранить", "помоги разрешить",
+        # проверка наличия конфликтов
+        "есть ли конфликт", "есть ли у меня конфликт",
+        "покажи конфликт", "сколько конфликт",
+        "какие конфликт", "список конфликт",
+        "мои конфликт", "у меня конфликт",
+        "проверь конфликт", "проверить конфликт",
     ],
     "predict": [
         "предскажи", "прогноз", "вероятность конфликт",
@@ -198,7 +204,7 @@ SITE_SECTIONS: Dict[str, Dict[str, str]] = {
         "pm": "Нажмите «Настройки» (шестерёнка) внизу бокового меню — редактирование профиля.",
         "admin": "Нажмите «Настройки» (шестерёнка) внизу бокового меню — редактирование профиля.",
     },
-    # конкретные темы/действия
+
     "отпуск": {
         "employee": "Откройте раздел «Исключения» в боковом меню → нажмите «Добавить исключение» → выберите тип «Отпуск», укажите даты начала и окончания.",
         "team_lead": "Сотрудник сам создаёт исключение «Отпуск» в разделе «Исключения». Вы видите проблемы команды в разделе «Проблемы».",
@@ -284,17 +290,32 @@ def detect_intent(message: str) -> str:
         if score > 0:
             scores[intent] = score
 
-    # навигация должна уступать рабочим интентам
-    # если у analyze/conflicts/etc такой же скор — отдаём приоритет им
+    # навигационные формулы (как/где + глагол) — сильный сигнал что спрашивают про UI
+    _NAV_FORMULAS = [
+        "как разрешить", "где разрешить",
+        "как создать", "где создать",
+        "как добавить", "где добавить",
+        "как посмотреть", "где посмотреть",
+        "как изменить", "где изменить",
+        "как удалить", "где удалить",
+        "как настроить", "где настроить",
+        "как найти", "где найти",
+        "как открыть", "где открыть",
+        "как обновить", "где обновить",
+    ]
+    has_nav_formula = any(f in msg_lower for f in _NAV_FORMULAS)
+
     working_intents = {"analyze", "conflicts", "predict", "score", "anomalies"}
-    max_score = max(scores.values()) if scores else 0
     if scores:
         top = max(scores, key=scores.get)
-        # если навигация набрала столько же сколько рабочий интент — берём рабочий
-        if top == "navigation" and max_score > 0:
-            for wi in working_intents:
-                if scores.get(wi, 0) == max_score:
-                    return wi
+        # навигационная формула — пользователь явно спрашивает про интерфейс
+        if has_nav_formula and "navigation" in scores:
+            return "navigation"
+        # иначе: навигация уступает любому рабочему интенту
+        if top == "navigation":
+            working_scores = {wi: scores[wi] for wi in working_intents if wi in scores}
+            if working_scores:
+                return max(working_scores, key=working_scores.get)
         return top
 
     return "general"
@@ -303,8 +324,8 @@ def detect_intent(message: str) -> str:
 
 # 2. ВЫЗОВ ИНСТРУМЕНТА
 def call_tool(intent: str, context: Dict[str, Any]) -> Optional[ToolResult]:
-    """Вызывает внутренний инструмент по имени интента.
-    Если для conflicts нет конфликтов в контексте — fallback на analyze.
+    """Вызывает внутренний инструмент по имени интента
+    Если для conflicts нет конфликтов в контексте — fallback на analyze
     """
     if intent == "general":
         return None
@@ -313,9 +334,18 @@ def call_tool(intent: str, context: Dict[str, Any]) -> Optional[ToolResult]:
     if intent == "navigation":
         return None
 
-    # Если спросили про конфликты но их нет — сделаем полный анализ
+    # Если спросили про конфликты но их нет — вернём чёткий ответ «нет конфликтов»
     if intent == "conflicts" and not context.get("conflicts"):
-        intent = "analyze"
+        return ToolResult(
+            tool_name="conflicts",
+            success=True,
+            data={
+                "conflict_type": None,
+                "status": "NO_CONFLICTS",
+                "explanation": "У вас нет конфликтов в расписании.",
+                "recommendations": [],
+            },
+        )
 
     tool_fn = TOOL_REGISTRY.get(intent)
     if tool_fn is None:
@@ -327,11 +357,11 @@ def call_tool(intent: str, context: Dict[str, Any]) -> Optional[ToolResult]:
 
 # 3. ГЕНЕРАЦИЯ ОТВЕТА ЧЕРЕЗ LLM
 def _format_tool_data(tool_result: ToolResult, role: str = "employee") -> str:
-    """Форматирует результат инструмента для вставки в промпт LLM.
+    """Форматирует результат инструмента для вставки в промпт LLM
 
     Args:
-        role: внутренний формат роли (employee / pm / both).
-              Фильтрует рекомендации — показывает только релевантные.
+        role: внутренний формат роли (employee / pm / both)
+              Фильтрует рекомендации — показывает только релевантные
     """
     if not tool_result.success:
         return f"Ошибка при вызове инструмента {tool_result.tool_name}: {tool_result.error}"
@@ -422,6 +452,9 @@ def _format_tool_data(tool_result: ToolResult, role: str = "employee") -> str:
         )
 
     elif tool_result.tool_name == "conflicts":
+        # Нет конфликтов — чёткий ответ
+        if data.get("status") == "NO_CONFLICTS":
+            return "КОНФЛИКТОВ НЕ ОБНАРУЖЕНО. Расписание без конфликтов."
         recs = data.get("recommendations", [])
         recs_text = []
         for r in recs:
@@ -450,24 +483,59 @@ def _nav_role_key(role: str) -> str:
     return mapping.get(role, "employee")
 
 
-def _build_navigation_context(message: str, role: str) -> str:
-    # формируем подсказки по разделам сайта для промпта LLM
+def _build_navigation_answer(message: str, role: str) -> str:
+    # строим ответ по навигации напрямую из справочника (без LLM)
+    # навигация — детерминистическая задача, LLM не нужен
     role_key = _nav_role_key(role)
     msg_lower = message.lower()
-    hints = []
+
+    # находим все совпадения, сортируем по убыванию длины ключа (длинные = специфичнее)
+    matches = []
     for section_key, texts in SITE_SECTIONS.items():
         if section_key in msg_lower:
-            hints.append(f"- {section_key}: {texts.get(role_key, texts.get('employee', ''))}")
-    if not hints:
-        # даём все подсказки если не нашли конкретный раздел
-        for section_key, texts in SITE_SECTIONS.items():
-            hints.append(f"- {section_key}: {texts.get(role_key, texts.get('employee', ''))}")
-    return "Справочник разделов:\n" + "\n".join(hints)
+            text = texts.get(role_key, texts.get('employee', ''))
+            matches.append((len(section_key), section_key, text))
+    matches.sort(key=lambda x: -x[0])
+
+    # фильтруем: если короткий ключ является подстрокой длинного — пропускаем короткий
+    # например «конфликт» — подстрока «разрешить конфликт», оставляем только длинный
+    filtered = []
+    for _, key, text in matches:
+        is_subsumed = any(
+            key != other_key and key in other_key and len(other_key) > len(key)
+            for _, other_key, _ in matches
+        )
+        if not is_subsumed:
+            filtered.append((key, text))
+
+    # убираем дубликаты текста
+    seen = set()
+    answers = []
+    for key, text in filtered:
+        if text not in seen:
+            answers.append(text)
+            seen.add(text)
+
+    if not answers:
+        # если не нашли конкретный раздел — общий ответ с меню
+        fallback_menu = {
+            "employee": "Обзор, Календарь, Задачи, Исключения, Уведомления или Настройки",
+            "team_lead": "Обзор, Команда, Проблемы, Уведомления или Настройки",
+            "hr": "Аналитика, Сотрудники, Данные, Исключения, Уведомления или Настройки",
+            "pm": "Планирование, Встречи, Команды, Конфликты, Уведомления или Настройки",
+            "admin": "Обзор, Пользователи, Команды, Интеграции, Уведомления или Настройки",
+        }
+        menu = fallback_menu.get(role_key, fallback_menu["employee"])
+        return f"Перейдите в нужный раздел через боковое меню: {menu}."
+
+    # берём не больше 2 самых релевантных ответов
+    answers = answers[:2]
+    return " ".join(answers)
 
 
 def _build_history_messages(history: List[ChatMessage], max_turns: int = 6) -> List[Dict[str, str]]:
-    """Конвертирует историю чата в формат messages для LLM.
-    Берём последние max_turns пар (user + assistant) чтобы не превышать контекст.
+    """Конвертирует историю чата в формат messages для LLM
+    Берём последние max_turns пар (user + assistant) чтобы не превышать контекст
     """
     if not history:
         return []
@@ -489,8 +557,8 @@ def generate_chat_response(
     context: Dict[str, Any],
     history: List[ChatMessage] = None,
 ) -> str:
-    """Генерирует ответ на русском языке через LLM.
-    Если LLM недоступна — возвращает шаблонный ответ.
+    """Генерирует ответ на русском языке через LLM
+    Если LLM недоступна — возвращает шаблонный ответ
     """
     profile = context.get("profile", {})
     name = profile.get("name", "")
@@ -529,24 +597,17 @@ def generate_chat_response(
     # Разный системный промпт для general vs tool-based
     # Адаптируем тон под роль (employee / pm)
 
+    # Нет конфликтов — прямой ответ без LLM (чтобы не было галлюцинаций)
+    if intent == "conflicts" and tool_result and tool_result.success:
+        data = tool_result.data or {}
+        if data.get("status") == "NO_CONFLICTS":
+            if is_pm:
+                return f"У сотрудника {full_name} нет конфликтов в расписании. Всё в порядке."
+            return f"{full_name}, у вас нет конфликтов в расписании. Всё в порядке."
+
     if intent == "navigation":
-        # навигация — подсказываем где найти раздел
-        nav_context = _build_navigation_context(message, role)
-        system_prompt = f"""Ты — навигационный ассистент. Помогаешь найти раздел на сайте. Отвечай на русском языке.
-
-ПРАВИЛА:
-1. Отвечай КОРОТКО — 1-2 предложения.
-2. Используй ТОЛЬКО информацию из справочника ниже. НЕ придумывай названия разделов и НЕ выдумывай действия.
-3. Если для роли указано «У ... нет раздела ...» — так и скажи, НЕ предлагай несуществующий раздел.
-4. Указывай конкретный раздел в боковом меню и действие.
-5. Обращайся к пользователю: «Откройте», «Перейдите».
-6. ЗАПРЕЩЕНО: упоминать «я», «AI».
-7. ЗАПРЕЩЕНО: придумывать названия разделов, которых нет в справочнике.
-
-Справочник разделов для роли пользователя:
-{nav_context}
-
-Формат ответа: ТОЛЬКО JSON {{"answer": "ваш ответ"}}"""
+        # навигация — шаблонный ответ из справочника (без LLM)
+        return _build_navigation_answer(message, role)
     elif intent == "general":
         if is_pm:
             system_prompt = """Ты — AI-ассистент для Project Manager. Помогаешь управлять рабочими графиками команды и предотвращать выгорание. Отвечай на русском языке.
@@ -725,22 +786,8 @@ def _fallback_response(
                (обращение «у сотрудника», «вашей команды»).
     """
     if intent == "navigation":
-        # навигация — подсказка по разделам сайта
-        role_key = _nav_role_key(role)
-        msg_lower = message.lower()
-        for section_key, texts in SITE_SECTIONS.items():
-            if section_key in msg_lower:
-                return texts.get(role_key, texts.get("employee", ""))
-        # если не нашли конкретный раздел — общий ответ
-        fallback_menu = {
-            "employee": "Обзор, Календарь, Задачи, Исключения, Уведомления или Настройки",
-            "team_lead": "Обзор, Команда, Проблемы, Уведомления или Настройки",
-            "hr": "Аналитика, Сотрудники, Данные, Исключения, Уведомления или Настройки",
-            "pm": "Планирование, Встречи, Команды, Конфликты, Уведомления или Настройки",
-            "admin": "Обзор, Пользователи, Команды, Интеграции, Уведомления или Настройки",
-        }
-        menu = fallback_menu.get(role_key, fallback_menu["employee"])
-        return f"Перейдите в нужный раздел через боковое меню: {menu}."
+        # навигация — используем общий шаблон
+        return _build_navigation_answer(message, role)
 
     if intent == "general":
         if is_pm:
@@ -798,6 +845,11 @@ def _fallback_response(
         return f"{full_name}, аномалий в графике не обнаружено. Расписание в пределах нормы."
 
     if intent == "conflicts":
+        # Нет конфликтов
+        if data.get("status") == "NO_CONFLICTS":
+            if is_pm:
+                return f"У сотрудника {full_name} нет конфликтов в расписании. Всё в порядке."
+            return f"{full_name}, у вас нет конфликтов в расписании. Всё в порядке."
         explanation = data.get("explanation", "")
         if is_pm:
             return f"Конфликт сотрудника {full_name} проанализирован. {explanation}" if explanation else f"Конфликт сотрудника {full_name} проанализирован. Проверьте рекомендации."
