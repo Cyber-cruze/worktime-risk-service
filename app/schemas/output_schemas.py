@@ -1,6 +1,5 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict
-
 
 class RiskMetrics(BaseModel):
     A_i_freshness: float
@@ -9,15 +8,26 @@ class RiskMetrics(BaseModel):
     Z_i_timezone: float
     H_i_hr_conflict: float
 
-
 class ClassificationResult(BaseModel):
-    groupId: int
-    groupName: str
+    group_id: int = Field(alias="groupId")
+    group_name: str = Field(alias="groupName")
 
+    model_config = {"populate_by_name": True}
+
+class RoleRecommendations(BaseModel):
+    """Рекомендации, разделённые по ролям."""
+    employee: List[str] = Field(
+        default_factory=list,
+        description="Рекомендации для сотрудника"
+    )
+    pm: List[str] = Field(
+        default_factory=list,
+        description="Рекомендации для Project Manager"
+    )
 
 class AnalyzeResponse(BaseModel):
-    userId: int
-    riskScore: float
+    user_id: str
+    risk_score: float
     metrics: RiskMetrics
     classification: ClassificationResult
-    recommendations: List[str]
+    recommendations: RoleRecommendations

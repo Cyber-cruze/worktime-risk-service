@@ -1,33 +1,31 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-
 class Task(BaseModel):
-    startTime: str = Field(..., description="ISO формат: YYYY-MM-DDTHH:MM:SS")
-    endTime: str = Field(..., description="ISO формат: YYYY-MM-DDTHH:MM:SS")
-
+    hours: float = Field(..., description="Часы на задачу")
 
 class Meeting(BaseModel):
-    startTime: str = Field(..., description="ISO формат: YYYY-MM-DDTHH:MM:SS")
-    endTime: str = Field(..., description="ISO формат: YYYY-MM-DDTHH:MM:SS")
-
+    start: str = Field(..., description="ISO формат: YYYY-MM-DDTHH:MM:SS")
+    end: str = Field(..., description="ISO формат: YYYY-MM-DDTHH:MM:SS")
 
 class Profile(BaseModel):
-    workHours: dict = Field(default_factory=lambda: {"start": "09:00", "end": "18:00"})
+    work_hours: dict = Field(default_factory=lambda: {"start": "09:00", "end": "18:00"})
     timezone: str = "Europe/Moscow"
-    lastUpdated: str = Field(..., description="ISO дата обновления")
+    last_updated: str = Field(..., description="ISO дата обновления")
     employment: str = "full-time"
 
-
 class HRData(BaseModel):
-    officialSchedule: str = "09:00-18:00"
-    onVacation: bool = False
-
+    official_schedule: str = "09:00-18:00"
+    on_vacation: bool = False
 
 class AnalyzeRequest(BaseModel):
-    userId: int
+    user_id: str
     profile: Profile
     tasks: List[Task] = []
     meetings: List[Meeting] = []
-    hrData: HRData = HRData()
+    hr_data: HRData = HRData()
     conflicts: list = []
+    role: str = Field(
+        default="EMPLOYEE",
+        description="Роль запрашивающего: EMPLOYEE или PROJECT_MANAGER"
+    )

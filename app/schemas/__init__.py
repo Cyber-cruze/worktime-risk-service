@@ -1,5 +1,5 @@
 from .input_schemas import AnalyzeRequest
-from .output_schemas import AnalyzeResponse, RiskMetrics, ClassificationResult
+from .output_schemas import AnalyzeResponse, RiskMetrics, ClassificationResult, RoleRecommendations
 
 from .conflict_schemas import (
     ConflictResolveRequest, ProfileSchema, TaskSchema, ConflictSchema,
@@ -15,7 +15,7 @@ from .batch_schemas import (  # ← Добавь это
 )
 
 __all__ = [
-    "AnalyzeRequest", "AnalyzeResponse", "RiskMetrics", "ClassificationResult",
+    "AnalyzeRequest", "AnalyzeResponse", "RiskMetrics", "ClassificationResult", "RoleRecommendations",
     "ConflictResolveRequest", "ProfileSchema", "TaskSchema", "ConflictSchema",
     "EmploymentType", "EventType", "ConflictType",
     "ResolutionResponse", "Recommendation",

@@ -6,6 +6,7 @@ from datetime import datetime
 
 from app.chat.schemas import ChatRequest, ChatResponse, ChatMessage, ToolResult
 from app.chat.tools import TOOL_REGISTRY
+from app.roles import normalize_role
 
 
 # 1. ОПРЕДЕЛЕНИЕ НАМЕРЕНИЯ
@@ -82,9 +83,10 @@ def call_tool(intent: str, context: Dict[str, Any]) -> Optional[ToolResult]:
     return tool_fn(context)
 
 
+
 # 3. ГЕНЕРАЦИЯ ОТВЕТА ЧЕРЕЗ LLM
 def _format_tool_data(tool_result: ToolResult) -> str:
-    """Форматирует результат инструмента для вставки в промпт LLM."""
+
     if not tool_result.success:
         return f"Ошибка при вызове инструмента {tool_result.tool_name}: {tool_result.error}"
 
@@ -93,7 +95,14 @@ def _format_tool_data(tool_result: ToolResult) -> str:
     if tool_result.tool_name == "analyze":
         metrics = data.get("metrics", {})
         classification = data.get("classification", {})
-        recs = data.get("recommendations", [])
+        recs = data.get("recommendations", {})
+
+        if isinstance(recs, dict):
+            recs_text = "; ".join(recs.get("employee", []) + recs.get("pm", []))
+        elif isinstance(recs, list):
+            recs_text = "; ".join(recs)
+        else:
+            recs_text = "нет"
         return (
             f"Риск выгорания: {data.get('risk_score', 'N/A')}\n"
             f"Метрики:\n"
@@ -102,8 +111,8 @@ def _format_tool_data(tool_result: ToolResult) -> str:
             f"  — Уровень загрузки: {metrics.get('L_i_workload', 'N/A')}\n"
             f"  — Часовой пояс (риск): {metrics.get('Z_i_timezone', 'N/A')}\n"
             f"  — Конфликт HR и календаря: {metrics.get('H_i_hr_conflict', 'N/A')}\n"
-            f"Группа: {classification.get('group_id', 'N/A')} — {classification.get('group_name', 'N/A')}\n"
-            f"Рекомендации: {'; '.join(recs) if recs else 'нет'}"
+            f"Группа: {classification.get('groupId', classification.get('group_id', 'N/A'))} — {classification.get('groupName', classification.get('group_name', 'N/A'))}\n"
+            f"Рекомендации: {recs_text}"
         )
 
     elif tool_result.tool_name == "predict":
@@ -200,8 +209,23 @@ def generate_chat_response(
         tool_data_text = "Данные инструмента недоступны."
 
     # Разный системный промпт для general и tool-based
+    # Адаптируем тон под роль (employee / pm)
+    is_pm = normalize_role(context.get("role", "")) == "pm"
+
     if intent == "general":
-        system_prompt = """Ты — AI-ассистент для анализа рабочих графиков и предотвращения выгорания. Отвечай на русском языке.
+        if is_pm:
+            system_prompt = """Ты — AI-ассистент для Project Manager. Помогаешь управлять рабочими графиками команды и предотвращать выгорание. Отвечай на русском языке.
+
+ПРАВИЛА:
+1. Отвечай КОРОТКО — 2-3 предложения.
+2. Если спрашивают о возможностях — перечисли: анализ риска выгорания сотрудников, оценка качества расписания, прогноз конфликтов, обнаружение аномалий, разрешение конфликтов.
+3. Обращайся к PM, а не к сотруднику. Используй «у сотрудника», «команда».
+4. ЗАПРЕЩЕНО: упоминать «я», «AI», технические термины.
+5. ЗАПРЕЩЕНО: «у тебя», «ты» — используйте «у сотрудника», «вы».
+
+Формат ответа: ТОЛЬКО JSON {"answer": "ваш ответ"}"""
+        else:
+            system_prompt = """Ты — AI-ассистент для анализа рабочих графиков и предотвращения выгорания. Отвечай на русском языке.
 
 ПРАВИЛА:
 1. Отвечай КОРОТКО — 2-3 предложения.
@@ -213,20 +237,43 @@ def generate_chat_response(
 
 Формат ответа: ТОЛЬКО JSON {"answer": "ваш ответ"}"""
     else:
-        system_prompt = """Ты — AI-ассистент для анализа рабочих графиков и предотвращения выгорания. Отвечай на русском языке.
+        if is_pm:
+            system_prompt = """Ты — AI-ассистент для Project Manager. Помогаешь управлять рабочими графиками команды и предотвращать выгорание. Отвечай на русском языке.
+
+ПРАВИЛА:
+1. Отвечай КОРОТКО — 2-4 предложения, по существу.
+2. Используй повелительное наклонение: «Пересмотрите», «Перераспределите», «Назначьте».
+3. Пиши с большой буквы в начале предложений.
+4. ОБРАЩАЙСЯ К PM, не к сотруднику: «у сотрудника», «команда», а не «у вас».
+5. ОБЯЗАТЕЛЬНО упоминай ГЛАВНЫЙ показатель из <результат_инструмента> первым предложением.
+6. Учитывай контекст предыдущих сообщений.
+7. ЗАПРЕЩЕНО: технические термины (PART_TIME, L_i_workload и т.д.).
+8. ЗАПРЕЩЕНО: «чтобы избежать», «для снижения», «рекомендуется».
+9. ЗАПРЕЩЕНО: «у тебя», «ты» — используй «у сотрудника», «вы».
+10. ЗАПРЕЩЕНО: упоминать «я» или «AI».
+11. ЗАПРЕЩЕНО: общие фразы без чисел — всегда вытащи главное число из данных.
+
+Формат ответа: ТОЛЬКО JSON {"answer": "ваш ответ"}"""
+        else:
+            system_prompt = """Ты — AI-ассистент для анализа рабочих графиков и предотвращения выгорания. Отвечай на русском языке.
 
 ПРАВИЛА:
 1. Отвечай КОРОТКО — 2-4 предложения, по существу.
 2. Используй повелительное наклонение: «Перенесите», «Обновите», «Сократите» — а не страдательный залог.
 3. Пиши с большой буквы в начале предложений.
 4. Обращайся к сотруднику по имени.
-5. ОБЯЗАТЕЛЬНО упоминай конкретные числа из раздела <результат_инструмента>: проценты (например «32%»), часы, баллы. НИКОГДА не давай ответ без конкретных цифр из данных.
-6. Учитывай контекст предыдущих сообщений если он есть — если пользователь спрашивает «а что с ним?» — понимай что «он» из контекста.
+5. ОБЯЗАТЕЛЬНО упоминай ГЛАВНЫЙ показатель из <результат_инструмента> первым предложением:
+   - analyze → «риск выгорания X%»
+   - score → «оценка расписания X/100 (класс Y)»
+   - predict → «вероятность конфликта X%»
+   - anomalies → «аномалия обнаружена / не обнаружена, оценка X%»
+   - conflicts → «конфликт типа X, статус Y»
+6. Учитывай контекст предыдущих сообщений — если ранее был «риск 32%», а спрашивают «а что с ним?», повтори и разъясни «32%».
 7. ЗАПРЕЩЕНО: технические термины (PART_TIME, FULL_TIME, L_i_workload и т.д.) — используй человеческий язык.
 8. ЗАПРЕЩЕНО: «чтобы избежать», «для снижения», «рекомендуется», «обратите внимание».
 9. ЗАПРЕЩЕНО: «у тебя», «ты» — используй «у вас», «вы».
 10. ЗАПРЕЩЕНО: упоминать «я» или «AI».
-11. ЗАПРЕЩЕНО: общие фразы без чисел — если в данных есть «Риск выгорания: 0.322», напиши «риск 32%», а не «риск зависит от факторов».
+11. ЗАПРЕЩЕНО: общие фразы без чисел — всегда вытащи главное число из данных.
 12. Если данных недостаточно — попросите уточнить вопрос.
 
 Формат ответа: ТОЛЬКО JSON {"answer": "ваш ответ"}"""
@@ -280,7 +327,7 @@ def generate_chat_response(
     except Exception as e:
         print(f"[chat engine] LLM ошибка: {e}")
 
-    # Fallback
+    # Fallback — шаблонный ответ без LLM
     return _fallback_response(message, intent, tool_result, full_name)
 
 
@@ -290,7 +337,7 @@ def _fallback_response(
     tool_result: Optional[ToolResult],
     full_name: str,
 ) -> str:
-    # Шаблонный ответ если LLM недоступна.
+    # Шаблонный ответ если LLM недоступна
     if intent == "general":
         return (
             f"{full_name}, я умею анализировать рабочие графики. "
@@ -332,6 +379,7 @@ def _fallback_response(
     return f"{full_name}, ваш запрос обработан. Проверьте данные в личном кабинете."
 
 
+
 # ГЛАВНЫЙ МЕТОД
 def process_chat(request: ChatRequest) -> ChatResponse:
     """Основной пайплайн чат-ассистента.
@@ -347,6 +395,7 @@ def process_chat(request: ChatRequest) -> ChatResponse:
     intent = detect_intent(request.message)
 
     # 2. Build context
+    role = normalize_role(getattr(request, "role", None) or "EMPLOYEE")
     context = {
         "user_id": request.user_id,
         "profile": request.profile or {},
@@ -354,6 +403,7 @@ def process_chat(request: ChatRequest) -> ChatResponse:
         "meetings": request.meetings or [],
         "conflicts": request.conflicts or [],
         "hr_data": request.hr_data or {},
+        "role": role,
     }
 
     # 3. Call tool

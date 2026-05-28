@@ -2,6 +2,8 @@ from typing import List, Dict
 from datetime import datetime, timezone
 import zoneinfo
 
+from app.metrics.date_filter import filter_current_week
+
 
 '''Возвращает:
 - L_i: уровень загрузки (задачи + встречи / capacity)
@@ -51,24 +53,27 @@ def calculate_workload_metrics(
 
     profile_tz = profile.get("timezone", "UTC")
 
+    # Фильтруем встречи — только текущая неделя
+    current_week_meetings = filter_current_week(meetings, date_key="start")
+
     # 1. L_i: Загрузка
     task_hours = sum(_parse_hours(t) for t in tasks)
-    meeting_hours = sum(_parse_hours(m) for m in meetings)
+    meeting_hours = sum(_parse_hours(m) for m in current_week_meetings)
 
     raw_load = (task_hours + meeting_hours) / weekly_capacity if weekly_capacity > 0 else 0
     L_i = min(raw_load, 1.0)
 
-    # 2. C_i: Встречи вне графика (в ЛОКАЛЬНОМ времени сотрудника)
+    # 2. C_i: Встречи вне графика (в ЛОКАЛЬНОМ времени сотрудника, только текущая неделя)
     work_start = int(profile.get("work_hours", {}).get("start", "09:00").split(":")[0])
     work_end = int(profile.get("work_hours", {}).get("end", "18:00").split(":")[0])
 
     outside_count = 0
-    for m in meetings:
+    for m in current_week_meetings:
         local_hour = _to_local_hour(_get_start(m), profile_tz)
         if local_hour < work_start or local_hour >= work_end:
             outside_count += 1
 
-    C_i = (outside_count / len(meetings)) if meetings else 0.0
+    C_i = (outside_count / len(current_week_meetings)) if current_week_meetings else 0.0
 
     return {
         "L_i": round(L_i, 3),

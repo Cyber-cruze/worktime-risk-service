@@ -1,10 +1,12 @@
 from typing import Dict, Any, Optional, List
 from app.chat.schemas import ToolResult
+from app.roles import normalize_role
+
 
 
 # 1. ANALYZE — полный анализ риска выгорания
 def tool_analyze(context: Dict[str, Any]) -> ToolResult:
-
+    # Вызывает calculate_risk_score + classify_employee + generate_recommendations
     try:
         from app.models import calculate_risk_score, classify_employee
         from app.recommendations.engine import generate_recommendations
@@ -20,6 +22,7 @@ def tool_analyze(context: Dict[str, Any]) -> ToolResult:
             hr_data=payload.get("hr_data"),
             meetings=payload.get("meetings"),
             conflict=None,
+            role=normalize_role(context.get("role", "EMPLOYEE")),
         )
 
         return ToolResult(
@@ -34,6 +37,7 @@ def tool_analyze(context: Dict[str, Any]) -> ToolResult:
         )
     except Exception as e:
         return ToolResult(tool_name="analyze", success=False, error=str(e))
+
 
 
 # 2. PREDICT — ML-прогноз вероятности конфликта
@@ -55,6 +59,7 @@ def tool_predict(context: Dict[str, Any]) -> ToolResult:
         )
     except Exception as e:
         return ToolResult(tool_name="predict", success=False, error=str(e))
+
 
 
 # 3. SCORE — оценка качества расписания
@@ -79,6 +84,7 @@ def tool_score(context: Dict[str, Any]) -> ToolResult:
         return ToolResult(tool_name="score", success=False, error=str(e))
 
 
+
 # 4. ANOMALIES — обнаружение аномалий в графике
 def tool_anomalies(context: Dict[str, Any]) -> ToolResult:
     try:
@@ -101,9 +107,10 @@ def tool_anomalies(context: Dict[str, Any]) -> ToolResult:
         return ToolResult(tool_name="anomalies", success=False, error=str(e))
 
 
+
 # 5. CONFLICTS — разрешение конфликта
 def tool_resolve_conflict(context: Dict[str, Any]) -> ToolResult:
-
+    # Разрешает первый конфликт из списка conflicts в контексте
     try:
         from app.conflict.resolver import resolve_conflict
         from app.schemas import (
@@ -178,7 +185,7 @@ def tool_resolve_conflict(context: Dict[str, Any]) -> ToolResult:
         )
         result = resolve_conflict(req)
 
-        # Сериализуем рекомендации с преобразованием datetime в строку
+        # Сериализуем рекомендации с преобразованием datetime → строка
         def _serialize(obj):
             if isinstance(obj, dict):
                 return {k: _serialize(v) for k, v in obj.items()}
@@ -203,22 +210,27 @@ def tool_resolve_conflict(context: Dict[str, Any]) -> ToolResult:
         return ToolResult(tool_name="conflicts", success=False, error=str(e))
 
 
+
 # Хелперы
 def _build_analyze_payload(context: Dict[str, Any]) -> Dict[str, Any]:
+    """Собирает payload для AnalyzeRequest из контекста чата.
 
+    Фронтенд может прислать данные в формате ProfileSchema (conflict_schemas)
+    или Profile (input_schemas). Приводим к единому виду.
+    """
     profile = context.get("profile", {})
     tasks = context.get("tasks", [])
     meetings = context.get("meetings", [])
     conflicts = context.get("conflicts", [])
     hr_data = context.get("hr_data", {})
 
-    # Адаптация: ProfileSchema -> AnalyzeRequest.Profile формат
+    # Адаптация: ProfileSchema → AnalyzeRequest.Profile формат
     if "workStart" in profile and "work_hours" not in profile:
         # Это формат из conflict_schemas — преобразуем в формат risk_calculator
         last_updated = (
-                profile.get("updatedAt")
-                or profile.get("last_updated")
-                or ""
+            profile.get("updatedAt")
+            or profile.get("last_updated")
+            or ""
         )
         profile = {
             "work_hours": {
@@ -226,11 +238,11 @@ def _build_analyze_payload(context: Dict[str, Any]) -> Dict[str, Any]:
                 "end": profile.get("workEnd", "18:00:00")[:5],
             },
             "timezone": profile.get("timezone", "UTC"),
-             "last_updated": last_updated,
+            "last_updated": last_updated,
             "employment": profile.get("employmentType", profile.get("employment", "FULL_TIME")),
         }
 
-    # Адаптация: TaskSchema (startTime/endTime) -> Task (hours)
+    # Адаптация: TaskSchema (startTime/endTime) → Task (hours)
     adapted_tasks = []
     for t in tasks:
         if "hours" not in t:
@@ -264,6 +276,7 @@ def _build_analyze_payload(context: Dict[str, Any]) -> Dict[str, Any]:
         "hr_data": hr_data or {"official_schedule": "09:00-18:00", "on_vacation": False},
         "conflicts": conflicts,
     }
+
 
 
 # Реестр инструментов
